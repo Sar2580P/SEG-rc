@@ -6,7 +6,7 @@ from typing import List
 import matplotlib.pyplot as plt
 from typing import List
 from PIL import Image
-from tqdm import tqdm 
+from tqdm import tqdm
 
 try:
     pipe = StableDiffusionXLSEGPipeline.from_pretrained(
@@ -24,14 +24,14 @@ prompts = [
 "",
 ]
 
-SAVE_DIR = os.path.join(config['save_dir'], f"seed-{config['seed']}" , 
-                         f"blur_regions-{'___'.join(config['blur_time_regions'])})", 
+SAVE_DIR = os.path.join(config['save_dir'], f"seed-{config['seed']}" ,
+                         f"blur_regions-{'___'.join(config['blur_time_regions'])})",
                          f"seg_applied_layers-{'___'.join(config['seg_applied_layers'])}")
 os.makedirs(SAVE_DIR, exist_ok=True)
 
 
 
-def create_plot(images: List[Image.Image], titles: List[str], 
+def create_plot(images: List[Image.Image], titles: List[str],
                 rows: int, cols: int, save_path:str):
     """
     :param images: List of PIL images to display.
@@ -53,8 +53,8 @@ def create_plot(images: List[Image.Image], titles: List[str],
     plt.tight_layout()
     plt.savefig(save_path)
     plt.close()
-    
-    
+
+
 if __name__=="__main__":
     for prompt in prompts:
         generator = torch.Generator(device="cuda").manual_seed(config["seed"])
@@ -63,7 +63,7 @@ if __name__=="__main__":
             titles = []
             for seg_scale in config['seg_scales']:
                 for seg_blur_sigma in config['seg_blur_sigmas']:
-                    titles += f"seg_blur_sigma-{seg_blur_sigma}_seg_scale-{seg_scale}_guidance_scale-{guidance_scale}"
+                    titles.append(f"seg_blur_sigma-{seg_blur_sigma}_seg_scale-{seg_scale}_guidance_scale-{guidance_scale}")
                     outputs += pipe(
                             [prompt],
                             num_inference_steps=config['num_inference_steps'],
@@ -75,6 +75,6 @@ if __name__=="__main__":
                             generator=generator,
                         ).images
             save_path = os.path.join(SAVE_DIR, f"guidance_scales-{guidance_scale}.png")
-            create_plot(outputs, titles,  rows=len(config['seg_scales']), 
+            create_plot(outputs, titles,  rows=len(config['seg_scales']),
                         cols=len(config['seg_blur_sigmas']), save_path=save_path)
 
