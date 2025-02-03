@@ -780,7 +780,7 @@ class StableDiffusionXLSEGPipeline(
             )
 
         return pred_original_sample
-    
+
     def pred_x0(self, latents, noise_pred, t, generator, device, prompt_embeds, output_type):
         pred_z0 = self.pred_z0(latents, noise_pred, t)
         pred_x0 = self.vae.decode(
@@ -791,9 +791,9 @@ class StableDiffusionXLSEGPipeline(
         #pred_x0, ____ = self.run_safety_checker(pred_x0, device, prompt_embeds.dtype)
         do_denormalize = [True] * pred_x0.shape[0]
         pred_x0 = self.image_processor.postprocess(pred_x0, output_type=output_type, do_denormalize=do_denormalize)
-        
+
         return pred_x0
-        
+
     @property
     def guidance_scale(self):
         return self._guidance_scale
@@ -832,19 +832,19 @@ class StableDiffusionXLSEGPipeline(
     @property
     def seg_scale(self):
         return self._seg_scale
-    
+
     @property
     def do_seg(self):
         return self._seg_scale > 0
-    
+
     @property
     def seg_applied_layers(self):
         return self._seg_applied_layers
-    
+
     @property
     def seg_applied_layers_index(self):
         return self._seg_applied_layers_index
-    
+
     @torch.no_grad()
     @replace_example_docstring(EXAMPLE_DOC_STRING)
     def __call__(
@@ -1093,7 +1093,7 @@ class StableDiffusionXLSEGPipeline(
         self._seg_scale = seg_scale
         self._seg_applied_layers = seg_applied_layers
         self._seg_applied_layers_index = seg_applied_layers_index
-        
+
         # 2. Define call parameters
         if prompt is not None and isinstance(prompt, str):
             batch_size = 1
@@ -1189,7 +1189,7 @@ class StableDiffusionXLSEGPipeline(
             prompt_embeds = torch.cat([negative_prompt_embeds, prompt_embeds, prompt_embeds], dim=0)
             add_text_embeds = torch.cat([negative_pooled_prompt_embeds, add_text_embeds, add_text_embeds], dim=0)
             add_time_ids = torch.cat([negative_add_time_ids, add_time_ids, add_time_ids], dim=0)
-            
+
         prompt_embeds = prompt_embeds.to(device)
         add_text_embeds = add_text_embeds.to(device)
         add_time_ids = add_time_ids.to(device).repeat(batch_size * num_images_per_prompt, 1)
@@ -1235,7 +1235,7 @@ class StableDiffusionXLSEGPipeline(
             down_layers = []
             mid_layers = []
             up_layers = []
-            
+
             down_layers_attention_maps = []
             mid_layers_attention_maps = []
             up_layers_attention_maps = []
@@ -1250,7 +1250,7 @@ class StableDiffusionXLSEGPipeline(
                         up_layers.append(module)
                     else:
                         raise ValueError(f"Invalid layer type: {layer_type}")
-            
+
         self._num_timesteps = len(timesteps)
         with self.progress_bar(total=num_inference_steps) as progress_bar:
             for i, t in enumerate(timesteps):
@@ -1269,13 +1269,13 @@ class StableDiffusionXLSEGPipeline(
                 #no
                 else:
                     latent_model_input = latents
-                    
+
                 # change attention layer in UNet if use SEG
                 if self.do_seg:
-                    
-                    replace_processor = SEGCFGSelfAttnProcessor(blur_sigma=seg_blur_sigma, 
-                                                                do_cfg=self.do_classifier_free_guidance, 
-                                                                curr_iter_idx = len(timesteps) - i - 1, total_iter=len(timesteps), 
+
+                    replace_processor = SEGCFGSelfAttnProcessor(blur_sigma=seg_blur_sigma,
+                                                                do_cfg=self.do_classifier_free_guidance,
+                                                                curr_iter_idx = len(timesteps) - i - 1, total_iter=len(timesteps),
                                                                 blur_time_regions=blur_time_regions, save_attention_maps=save_attention_maps)
 
                     if self.seg_applied_layers_index:
@@ -1314,7 +1314,7 @@ class StableDiffusionXLSEGPipeline(
                                 raise ValueError(
                                     f"Invalid layer index: {drop_full_layer}. Available layers are: down, mid and up. If you need to specify each layer index, you can use `seg_applied_layers_index`"
                                 )
-                                
+
                 latent_model_input = self.scheduler.scale_model_input(latent_model_input, t)
 
                 # predict the noise residual
@@ -1331,8 +1331,8 @@ class StableDiffusionXLSEGPipeline(
                     added_cond_kwargs=added_cond_kwargs,
                     return_dict=False,
                 )[0]
-                
-                if save_attention_maps:
+
+                if self.do_seg and save_attention_maps:
                     assert replace_processor.save_attention_maps, f"save_attention_maps is set to True but the processor has not been set to save attention maps"
                     d, m , u = len(down_layers), len(mid_layers), len(up_layers)
                     attention_maps = replace_processor.attention_maps
@@ -1347,20 +1347,20 @@ class StableDiffusionXLSEGPipeline(
                 # seg
                 elif not self.do_classifier_free_guidance and self.do_seg:
                     noise_pred_original, noise_pred_perturb = noise_pred.chunk(2)
-                    
+
                     signal_scale = self.seg_scale
-                    
+
                     noise_pred = noise_pred_original + signal_scale * (noise_pred_original - noise_pred_perturb)
-                    
+
                 # both
                 elif self.do_classifier_free_guidance and self.do_seg:
-                    
+
                     noise_pred_uncond, noise_pred_text, noise_pred_text_perturb = noise_pred.chunk(3)
-                    
+
                     signal_scale = self.seg_scale
-                    
+
                     noise_pred = noise_pred_text + (self.guidance_scale-1.0) * (noise_pred_text - noise_pred_uncond) + signal_scale * (noise_pred_text - noise_pred_text_perturb)
-                
+
                 if self.do_classifier_free_guidance and self.guidance_rescale > 0.0:
                     # Based on 3.4. in https://arxiv.org/pdf/2305.08891.pdf
                     noise_pred = rescale_noise_cfg(noise_pred, noise_pred_text, guidance_rescale=self.guidance_rescale)
@@ -1398,15 +1398,17 @@ class StableDiffusionXLSEGPipeline(
 
                 if XLA_AVAILABLE:
                     xm.mark_step()
-            
-            if save_attention_maps:
+
+            if self.do_seg and save_attention_maps:
                 assert save_path_attention_maps is not None, f"save_path_attention_maps is not provided"
-                down_attn_tensor = torch.stack(down_layers_attention_maps, dim=0).cpu().detach().numpy()
-                mid_attn_tensor = torch.stack(mid_layers_attention_maps, dim=0).cpu().detach().numpy()
-                up_attn_tensor = torch.stack(up_layers_attention_maps, dim=0).cpu().detach().numpy()
-                self._attention_maps = {"down": down_attn_tensor, "mid": mid_attn_tensor, "up": up_attn_tensor}
+                self._attention_maps = {"down": down_layers_attention_maps,
+                                        "mid": mid_layers_attention_maps,
+                                        "up": up_layers_attention_maps}
                 pickle.dump(self._attention_maps, open(f"{save_path_attention_maps}.pkl", "wb"))
-                logging.info(f"Attention maps saved at {save_path_attention_maps}.pkl")
+                del self._attention_maps
+                del down_layers_attention_maps
+                del mid_layers_attention_maps
+                del up_layers_attention_maps
 
         if not output_type == "latent":
             # make sure the VAE is in float32 mode, as it overflows in float16

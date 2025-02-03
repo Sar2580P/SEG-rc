@@ -24,10 +24,14 @@ prompts = [
 "",
 ]
 
-SAVE_DIR = os.path.join(config['save_dir'], f"seed-{config['seed']}" ,
+PICS_SAVE_DIR = os.path.join(config['save_dir'], f"seed-{config['seed']}" ,
                          f"blur_regions-{'___'.join(config['blur_time_regions'])})",
                          f"seg_applied_layers-{'___'.join(config['seg_applied_layers'])}")
-os.makedirs(SAVE_DIR, exist_ok=True)
+ATTN_SAVE_DIR = os.path.join(config['atten_save_dir'], f"seed-{config['seed']}" ,
+                         f"blur_regions-{'___'.join(config['blur_time_regions'])})",
+                         f"seg_applied_layers-{'___'.join(config['seg_applied_layers'])}")
+os.makedirs(PICS_SAVE_DIR, exist_ok=True)
+os.makedirs(ATTN_SAVE_DIR, exist_ok=True)
 
 
 
@@ -73,12 +77,12 @@ if __name__=="__main__":
                             seg_applied_layers=config['seg_applied_layers'],
                             blur_time_regions=config['blur_time_regions'],
                             generator=generator,
-                            save_attention_maps=config['save_attention_maps'], 
-                            save_path_attention_maps = os.path.join(SAVE_DIR, f"seg_blur_sigma-{seg_blur_sigma}_seg_scale-{seg_scale}_guidance_scale-{guidance_scale}")\
+                            save_attention_maps=config['save_attention_maps'],
+                            save_path_attention_maps = os.path.join(ATTN_SAVE_DIR, f"seg_blur_sigma-{seg_blur_sigma}_seg_scale-{seg_scale}_guidance_scale-{guidance_scale}")\
                                                         if config['save_attention_maps'] else None
-                            
+
                         ).images
-            save_path = os.path.join(SAVE_DIR, f"guidance_scales-{guidance_scale}.png")
+            save_path = os.path.join(PICS_SAVE_DIR, f"guidance_scales-{guidance_scale}.png")
             create_plot(outputs, titles,  rows=len(config['seg_scales']),
                         cols=len(config['seg_blur_sigmas']), save_path=save_path)
 

@@ -33,12 +33,12 @@ class SEGCFGSelfAttnProcessor:
             self.inf_blur = True
         else:
             self.inf_blur = False
-            
+
         self.should_apply_smoothing = self._should_apply_smoothing(curr_iter_idx, total_iter, blur_time_regions)
         self.save_attention_maps = save_attention_maps
         self.attention_maps = []
-    
-    def scaled_dot_product_attention_with_map(query, key, value, attention_mask=None, dropout_p=0.0):
+
+    def scaled_dot_product_attention_with_map(self, query, key, value, attention_mask=None, dropout_p=0.0):
         """
         Computes the attention map and returns both the attended output and the attention weights.
 
@@ -70,12 +70,12 @@ class SEGCFGSelfAttnProcessor:
             query, key, value, attn_mask=attention_mask, dropout_p=dropout_p, is_causal=False
         )  # [B, H, S, D]
 
-        return hidden_states, attention_map  
+        return hidden_states, torch.mean(attention_map, dim=1)
 
     def _should_apply_smoothing(self, curr_t: int, total_t: int, regions: List[str]) -> bool:
         """
         Determines whether smoothing should be applied based on the current timestamp and regions.
-        
+
         :param curr_t: Current timestamp (in range 0 to total_t-1)
         :param total_t: Total number of timestamps
         :param regions: List containing 'mid', 'begin', 'end' to specify applicable regions
@@ -83,17 +83,17 @@ class SEGCFGSelfAttnProcessor:
         """
         third = total_t // 3
         apply_smoothing = False
-        
+
         if 'begin' in regions and curr_t >= 2 * third:
             apply_smoothing = True
         elif 'mid' in regions and third <= curr_t < 2 * third:
             apply_smoothing = True
         elif 'end' in regions and curr_t < third:
             apply_smoothing = True
-        
+
         logger.info(f"Smoothing {'applied' if apply_smoothing else 'not applied'} \
                     at curr_t={curr_t}, total_t={total_t}, regions={regions}")
-        
+
         return apply_smoothing
 
     def __call__(

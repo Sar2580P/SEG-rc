@@ -7,3 +7,5 @@ blur_time_regions : ['begin', 'mid']
 seg_scales : [0.0, 3 , 5]
 seg_blur_sigmas : [0, 1 ,10, 10000]
 save_dir : 'pics'
+save_attention_maps : !!bool True
+atten_save_dir : 'results/attn_maps'
