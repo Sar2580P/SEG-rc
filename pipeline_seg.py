@@ -4,6 +4,7 @@ import inspect
 from typing import Any, Callable, Dict, List, Optional, Tuple, Union
 import pickle
 import math
+import numpy as np
 import torch
 import torch.nn.functional as F
 from packaging import version
@@ -864,6 +865,7 @@ class StableDiffusionXLSEGPipeline(
         blur_time_regions: List[str] = ['mid'], #['mid', 'start', 'end']
         save_attention_maps: bool = False,
         save_path_attention_maps: str = None,
+        sample_ct_attn_maps : int =0 ,
         negative_prompt: Optional[Union[str, List[str]]] = None,
         negative_prompt_2: Optional[Union[str, List[str]]] = None,
         num_images_per_prompt: Optional[int] = 1,
@@ -1253,6 +1255,14 @@ class StableDiffusionXLSEGPipeline(
 
         self._num_timesteps = len(timesteps)
         with self.progress_bar(total=num_inference_steps) as progress_bar:
+            
+            # sampling time-stamps at which to save attention maps
+            time_stamps_to_sample_attn_maps = set()
+            if sample_ct_attn_maps > 0:
+                time_stamps_to_sample_attn_maps = set(
+                    [int(i) for i in np.linspace(0, len(timesteps) - 1, sample_ct_attn_maps)]
+                )
+            # starting iterative diffusion process
             for i, t in enumerate(timesteps):
                 if self.interrupt:
                     continue
@@ -1332,13 +1342,13 @@ class StableDiffusionXLSEGPipeline(
                     return_dict=False,
                 )[0]
 
-                if self.do_seg and save_attention_maps:
+                if self.do_seg and save_attention_maps and (i in time_stamps_to_sample_attn_maps):
                     assert replace_processor.save_attention_maps, f"save_attention_maps is set to True but the processor has not been set to save attention maps"
                     d, m , u = len(down_layers), len(mid_layers), len(up_layers)
                     attention_maps = replace_processor.attention_maps
-                    down_layers_attention_maps.append(attention_maps[:d])
-                    mid_layers_attention_maps.append(attention_maps[d:d+m])
-                    up_layers_attention_maps.append(attention_maps[d+m:d+m+u])
+                    down_layers_attention_maps.extend(attention_maps[:d])
+                    mid_layers_attention_maps.extend(attention_maps[d:d+m])
+                    up_layers_attention_maps.extend(attention_maps[d+m:d+m+u])
 
                 # perform guidance
                 if self.do_classifier_free_guidance and not self.do_seg:

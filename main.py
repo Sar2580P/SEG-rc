@@ -79,7 +79,8 @@ if __name__=="__main__":
                             generator=generator,
                             save_attention_maps=config['save_attention_maps'],
                             save_path_attention_maps = os.path.join(ATTN_SAVE_DIR, f"seg_blur_sigma-{seg_blur_sigma}_seg_scale-{seg_scale}_guidance_scale-{guidance_scale}")\
-                                                        if config['save_attention_maps'] else None
+                                                        if config['save_attention_maps'] else None , 
+                            sample_ct_attn_maps = config['sample_ct_attn_maps']
 
                         ).images
             save_path = os.path.join(PICS_SAVE_DIR, f"guidance_scales-{guidance_scale}.png")

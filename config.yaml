@@ -9,3 +9,4 @@ seg_blur_sigmas : [0, 1 ,10, 10000]
 save_dir : 'pics'
 save_attention_maps : !!bool True
 atten_save_dir : 'results/attn_maps'
+sample_ct_attn_maps : !!bool 5
