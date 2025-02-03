@@ -2,7 +2,7 @@
 
 import inspect
 from typing import Any, Callable, Dict, List, Optional, Tuple, Union
-
+import pickle
 import math
 import torch
 import torch.nn.functional as F
@@ -862,6 +862,8 @@ class StableDiffusionXLSEGPipeline(
         seg_applied_layers: List[str] = ['mid'], #['down', 'mid', 'up']
         seg_applied_layers_index: List[str] = None, #['d4', 'd5', 'm0']
         blur_time_regions: List[str] = ['mid'], #['mid', 'start', 'end']
+        save_attention_maps: bool = False,
+        save_path_attention_maps: str = None,
         negative_prompt: Optional[Union[str, List[str]]] = None,
         negative_prompt_2: Optional[Union[str, List[str]]] = None,
         num_images_per_prompt: Optional[int] = 1,
@@ -1233,6 +1235,10 @@ class StableDiffusionXLSEGPipeline(
             down_layers = []
             mid_layers = []
             up_layers = []
+            
+            down_layers_attention_maps = []
+            mid_layers_attention_maps = []
+            up_layers_attention_maps = []
             for name, module in self.unet.named_modules():
                 if 'attn1' in name and 'to' not in name:
                     layer_type = name.split('.')[0].split('_')[0]
@@ -1269,7 +1275,8 @@ class StableDiffusionXLSEGPipeline(
                     
                     replace_processor = SEGCFGSelfAttnProcessor(blur_sigma=seg_blur_sigma, 
                                                                 do_cfg=self.do_classifier_free_guidance, 
-                                                                curr_iter_idx = len(timesteps) - i - 1, total_iter=len(timesteps), blur_time_regions=blur_time_regions)
+                                                                curr_iter_idx = len(timesteps) - i - 1, total_iter=len(timesteps), 
+                                                                blur_time_regions=blur_time_regions, save_attention_maps=save_attention_maps)
 
                     if self.seg_applied_layers_index:
                         drop_layers = self.seg_applied_layers_index
@@ -1324,6 +1331,14 @@ class StableDiffusionXLSEGPipeline(
                     added_cond_kwargs=added_cond_kwargs,
                     return_dict=False,
                 )[0]
+                
+                if save_attention_maps:
+                    assert replace_processor.save_attention_maps, f"save_attention_maps is set to True but the processor has not been set to save attention maps"
+                    d, m , u = len(down_layers), len(mid_layers), len(up_layers)
+                    attention_maps = replace_processor.attention_maps
+                    down_layers_attention_maps.append(attention_maps[:d])
+                    mid_layers_attention_maps.append(attention_maps[d:d+m])
+                    up_layers_attention_maps.append(attention_maps[d+m:d+m+u])
 
                 # perform guidance
                 if self.do_classifier_free_guidance and not self.do_seg:
@@ -1383,6 +1398,15 @@ class StableDiffusionXLSEGPipeline(
 
                 if XLA_AVAILABLE:
                     xm.mark_step()
+            
+            if save_attention_maps:
+                assert save_path_attention_maps is not None, f"save_path_attention_maps is not provided"
+                down_attn_tensor = torch.stack(down_layers_attention_maps, dim=0).cpu().detach().numpy()
+                mid_attn_tensor = torch.stack(mid_layers_attention_maps, dim=0).cpu().detach().numpy()
+                up_attn_tensor = torch.stack(up_layers_attention_maps, dim=0).cpu().detach().numpy()
+                self._attention_maps = {"down": down_attn_tensor, "mid": mid_attn_tensor, "up": up_attn_tensor}
+                pickle.dump(self._attention_maps, open(f"{save_path_attention_maps}.pkl", "wb"))
+                logging.info(f"Attention maps saved at {save_path_attention_maps}.pkl")
 
         if not output_type == "latent":
             # make sure the VAE is in float32 mode, as it overflows in float16

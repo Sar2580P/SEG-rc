@@ -73,6 +73,10 @@ if __name__=="__main__":
                             seg_applied_layers=config['seg_applied_layers'],
                             blur_time_regions=config['blur_time_regions'],
                             generator=generator,
+                            save_attention_maps=config['save_attention_maps'], 
+                            save_path_attention_maps = os.path.join(SAVE_DIR, f"seg_blur_sigma-{seg_blur_sigma}_seg_scale-{seg_scale}_guidance_scale-{guidance_scale}")\
+                                                        if config['save_attention_maps'] else None
+                            
                         ).images
             save_path = os.path.join(SAVE_DIR, f"guidance_scales-{guidance_scale}.png")
             create_plot(outputs, titles,  rows=len(config['seg_scales']),

@@ -16,7 +16,6 @@ from diffusers.utils import (
 )
 import math
 from blur import gaussian_blur_2d
-import numpy as np
 logger = logging.get_logger(__name__)
 
 class SEGCFGSelfAttnProcessor:
@@ -24,7 +23,7 @@ class SEGCFGSelfAttnProcessor:
     Processor for implementing scaled dot-product attention (enabled by default if you're using PyTorch 2.0).
     """
 
-    def __init__(self, curr_iter_idx:int, total_iter:int,blur_time_regions:List,  
+    def __init__(self, curr_iter_idx:int, total_iter:int,blur_time_regions:List,  save_attention_maps:bool=False,
                  blur_sigma=1.0, do_cfg=True, inf_blur_threshold=9999.0):
         if not hasattr(F, "scaled_dot_product_attention"):
             raise ImportError("AttnProcessor2_0 requires PyTorch 2.0, to use it, please upgrade PyTorch to 2.0.")
@@ -36,7 +35,42 @@ class SEGCFGSelfAttnProcessor:
             self.inf_blur = False
             
         self.should_apply_smoothing = self._should_apply_smoothing(curr_iter_idx, total_iter, blur_time_regions)
-        
+        self.save_attention_maps = save_attention_maps
+        self.attention_maps = []
+    
+    def scaled_dot_product_attention_with_map(query, key, value, attention_mask=None, dropout_p=0.0):
+        """
+        Computes the attention map and returns both the attended output and the attention weights.
+
+        Args:
+            query (Tensor): Query tensor of shape [B, H, S, D]
+            key (Tensor): Key tensor of shape [B, H, S, D]
+            value (Tensor): Value tensor of shape [B, H, S, D]
+            attention_mask (Tensor, optional): Mask tensor of shape [B, 1, S, S] or None
+            dropout_p (float): Dropout probability
+
+        Returns:
+            hidden_states (Tensor): Attended output of shape [B, H, S, D]
+            attention_map (Tensor): Attention weights of shape [B, H, S, S]
+        """
+        d_k = query.shape[-1]
+
+        # Compute attention scores (logits)
+        attn_logits = torch.matmul(query, key.transpose(-2, -1)) / d_k**0.5  # [B, H, S, S]
+
+        # Apply attention mask if provided
+        if attention_mask is not None:
+            attn_logits += attention_mask  # Ensure masked positions are not attended
+
+        # Compute attention weights (softmax over last dimension)
+        attention_map = F.softmax(attn_logits, dim=-1)  # [B, H, S, S]
+
+        # Use PyTorch's built-in function for better efficiency
+        hidden_states = F.scaled_dot_product_attention(
+            query, key, value, attn_mask=attention_mask, dropout_p=dropout_p, is_causal=False
+        )  # [B, H, S, D]
+
+        return hidden_states, attention_map  
 
     def _should_apply_smoothing(self, curr_t: int, total_t: int, regions: List[str]) -> bool:
         """
@@ -61,15 +95,6 @@ class SEGCFGSelfAttnProcessor:
                     at curr_t={curr_t}, total_t={total_t}, regions={regions}")
         
         return apply_smoothing
-
-
-    
-    def _save_attention_map(self, attn_map, attn_map_path):
-        '''
-        Saves the attention map to the given path.
-        '''
-        attn_map = attn_map.squeeze(0).cpu().numpy()
-        np.save(attn_map_path, attn_map)
 
     def __call__(
         self,
@@ -155,10 +180,15 @@ class SEGCFGSelfAttnProcessor:
                 query_ptb = query_ptb.view(batch_size//2, attn.heads, head_dim, height * width).permute(0, 1, 3, 2)
                 query = torch.cat((query_org, query_ptb), dim=0)
 
-        hidden_states = F.scaled_dot_product_attention(
-            query, key, value, attn_mask=attention_mask, dropout_p=0.0, is_causal=False,
-        )
-        print(f"q: {query.shape}, k: {key.shape}, v: {value.shape}, h: {hidden_states.shape}")
+        if not self.save_attention_maps:
+            hidden_states = F.scaled_dot_product_attention(
+                query, key, value, attn_mask=attention_mask, dropout_p=0.0, is_causal=False,
+            )
+        else:
+            hidden_states, attention_map = self.scaled_dot_product_attention_with_map(
+                query, key, value, attention_mask, dropout_p=0.0
+            )
+            self.attention_maps.append(attention_map)
         hidden_states = hidden_states.transpose(1, 2).reshape(batch_size, -1, attn.heads * head_dim)
         hidden_states = hidden_states.to(query.dtype)
 
