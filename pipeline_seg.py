@@ -1255,7 +1255,7 @@ class StableDiffusionXLSEGPipeline(
 
         self._num_timesteps = len(timesteps)
         with self.progress_bar(total=num_inference_steps) as progress_bar:
-            
+
             # sampling time-stamps at which to save attention maps
             time_stamps_to_sample_attn_maps = set()
             if sample_ct_attn_maps > 0:
@@ -1346,9 +1346,9 @@ class StableDiffusionXLSEGPipeline(
                     assert replace_processor.save_attention_maps, f"save_attention_maps is set to True but the processor has not been set to save attention maps"
                     d, m , u = len(down_layers), len(mid_layers), len(up_layers)
                     attention_maps = replace_processor.attention_maps
-                    down_layers_attention_maps.extend(attention_maps[:d])
+                    up_layers_attention_maps.extend(attention_maps[:d])
                     mid_layers_attention_maps.extend(attention_maps[d:d+m])
-                    up_layers_attention_maps.extend(attention_maps[d+m:d+m+u])
+                    down_layers_attention_maps.extend(attention_maps[d+m:d+m+u])
 
                 # perform guidance
                 if self.do_classifier_free_guidance and not self.do_seg:
@@ -1411,9 +1411,9 @@ class StableDiffusionXLSEGPipeline(
 
             if self.do_seg and save_attention_maps:
                 assert save_path_attention_maps is not None, f"save_path_attention_maps is not provided"
-                self._attention_maps = {"down": down_layers_attention_maps,
+                self._attention_maps = {"up": up_layers_attention_maps,
                                         "mid": mid_layers_attention_maps,
-                                        "up": up_layers_attention_maps}
+                                        "down": down_layers_attention_maps}
                 pickle.dump(self._attention_maps, open(f"{save_path_attention_maps}.pkl", "wb"))
                 del self._attention_maps
                 del down_layers_attention_maps

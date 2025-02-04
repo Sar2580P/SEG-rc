@@ -1,12 +1,5 @@
-save_attn_map : !!bool False
-seed : 4
-num_inference_steps : 30
-seg_applied_layers : ['down' , 'mid']
-guidance_scales : [0 , 3 , 5]
-blur_time_regions : ['begin', 'mid']
-seg_scales : [0.0, 3 , 5]
-seg_blur_sigmas : [0, 1 ,10, 10000]
-save_dir : 'pics'
-save_attention_maps : !!bool True
-atten_save_dir : 'results/attn_maps'
-sample_ct_attn_maps : !!bool 5
+save_attn_map: !!bool False
+seed: 42
+num_inference_steps: 30
+seg_applied_layers: [mid, up]
+blur_time_regions: [begin]

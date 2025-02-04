@@ -19,19 +19,7 @@ try:
 except Exception as e:
     print(f"Error: {e}")
 
-config = read_yaml("config.yaml")
-prompts = [
-"",
-]
 
-PICS_SAVE_DIR = os.path.join(config['save_dir'], f"seed-{config['seed']}" ,
-                         f"blur_regions-{'___'.join(config['blur_time_regions'])})",
-                         f"seg_applied_layers-{'___'.join(config['seg_applied_layers'])}")
-ATTN_SAVE_DIR = os.path.join(config['atten_save_dir'], f"seed-{config['seed']}" ,
-                         f"blur_regions-{'___'.join(config['blur_time_regions'])})",
-                         f"seg_applied_layers-{'___'.join(config['seg_applied_layers'])}")
-os.makedirs(PICS_SAVE_DIR, exist_ok=True)
-os.makedirs(ATTN_SAVE_DIR, exist_ok=True)
 
 
 
@@ -58,6 +46,36 @@ def create_plot(images: List[Image.Image], titles: List[str],
     plt.savefig(save_path)
     plt.close()
 
+config = {
+'seed' : 4,
+'num_inference_steps' : 30,
+'seg_applied_layers' : ['down' , 'mid'],
+'guidance_scales' : [0 , 3 , 5],
+'blur_time_regions' : ['begin', 'mid'],
+'seg_scales' : [0, 3 , 5],
+'seg_blur_sigmas' : [0, 1 ,10, 10000],
+'save_dir' : 'pics',
+'save_attention_maps' :  True,
+'atten_save_dir' : 'results/attn_maps',
+'sample_ct_attn_maps' :  3
+}
+
+_config = read_yaml("config.yaml")
+prompts = [
+"",
+]
+config.update(_config)
+
+PICS_SAVE_DIR = os.path.join(config['save_dir'], f"seed-{config['seed']}" ,
+                         f"blur_regions-{'___'.join(config['blur_time_regions'])})",
+                         f"seg_applied_layers-{'___'.join(config['seg_applied_layers'])}")
+ATTN_SAVE_DIR = os.path.join(config['atten_save_dir'], f"seed-{config['seed']}" ,
+                         f"blur_regions-{'___'.join(config['blur_time_regions'])})",
+                         f"seg_applied_layers-{'___'.join(config['seg_applied_layers'])}")
+os.makedirs(PICS_SAVE_DIR, exist_ok=True)
+os.makedirs(ATTN_SAVE_DIR, exist_ok=True)
+
+
 
 if __name__=="__main__":
     for prompt in prompts:
@@ -67,6 +85,8 @@ if __name__=="__main__":
             titles = []
             for seg_scale in config['seg_scales']:
                 for seg_blur_sigma in config['seg_blur_sigmas']:
+                    if seg_blur_sigma==0 and seg_scale>0:
+                        continue
                     titles.append(f"seg_blur_sigma-{seg_blur_sigma}_seg_scale-{seg_scale}_guidance_scale-{guidance_scale}")
                     outputs += pipe(
                             [prompt],
@@ -79,7 +99,7 @@ if __name__=="__main__":
                             generator=generator,
                             save_attention_maps=config['save_attention_maps'],
                             save_path_attention_maps = os.path.join(ATTN_SAVE_DIR, f"seg_blur_sigma-{seg_blur_sigma}_seg_scale-{seg_scale}_guidance_scale-{guidance_scale}")\
-                                                        if config['save_attention_maps'] else None , 
+                                                        if config['save_attention_maps'] else None ,
                             sample_ct_attn_maps = config['sample_ct_attn_maps']
 
                         ).images

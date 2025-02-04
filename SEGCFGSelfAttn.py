@@ -15,6 +15,7 @@ from diffusers.utils import (
     unscale_lora_layers,
 )
 import math
+import numpy as np
 from blur import gaussian_blur_2d
 logger = logging.get_logger(__name__)
 
@@ -70,24 +71,29 @@ class SEGCFGSelfAttnProcessor:
         hidden_states = F.scaled_dot_product_attention(
             query, key, value, attn_mask=attention_mask, dropout_p=dropout_p, is_causal=False
         )  # [B, H, S, D]
-
         return hidden_states, attention_map
-    
-    def reduce_precision(self, attention_map: torch.Tensor) -> torch.Tensor:
+
+
+    def reduce_precision(self, attention_map: torch.Tensor) -> np.ndarray:
         """
-        Reduces the precision of the input tensor to unsigned 16-bit integer (uint16) to save memory.
+        Reduces the precision of the input tensor to unsigned 16-bit integer (uint16) and converts it to a NumPy array.
 
         Args:
             attention_map (Tensor): Input tensor of shape [B, S, S], expected to be in range [0, 1].
 
         Returns:
-            Tensor: Reduced-precision tensor of shape [B, S, S] in uint16 format.
+            np.ndarray: Reduced-precision NumPy array of shape [B, S, S] in uint16 format.
         """
         if torch.any(torch.isnan(attention_map)):
             logger.warning("Attention map contains NaN values. Clipping to [0, 1] before scaling.")
             attention_map = attention_map.clamp(0, 1)
+
+        # Scale and convert to uint16
         scaled_attn_maps = (attention_map * 10000).clamp(0, 65535).to(torch.uint16)
-        return scaled_attn_maps
+
+        # Convert to NumPy and return
+        return scaled_attn_maps.cpu().numpy().astype(np.uint16)
+
 
 
     def _should_apply_smoothing(self, curr_t: int, total_t: int, regions: List[str]) -> bool:
@@ -206,7 +212,8 @@ class SEGCFGSelfAttnProcessor:
             hidden_states, attention_map = self.scaled_dot_product_attention_with_map(
                 query, key, value, attention_mask, dropout_p=0.0
             )
-            self.attention_maps.append(attention_map)
+            if attention_map.shape[1]<=1024 and attention_map.shape[2]<=1024:
+                self.attention_maps.append(attention_map)
         hidden_states = hidden_states.transpose(1, 2).reshape(batch_size, -1, attn.heads * head_dim)
         hidden_states = hidden_states.to(query.dtype)
 
