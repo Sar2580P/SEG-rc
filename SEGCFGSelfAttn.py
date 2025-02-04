@@ -64,13 +64,31 @@ class SEGCFGSelfAttnProcessor:
 
         # Compute attention weights (softmax over last dimension)
         attention_map = F.softmax(attn_logits, dim=-1)  # [B, H, S, S]
-
+        attention_map = torch.mean(attention_map, dim=1)  # [B, S, S]
+        attention_map = self.reduce_precision(attention_map)   # to reduce memory footprint for attention_map storage
         # Use PyTorch's built-in function for better efficiency
         hidden_states = F.scaled_dot_product_attention(
             query, key, value, attn_mask=attention_mask, dropout_p=dropout_p, is_causal=False
         )  # [B, H, S, D]
 
-        return hidden_states, torch.mean(attention_map, dim=1)
+        return hidden_states, attention_map
+    
+    def reduce_precision(self, attention_map: torch.Tensor) -> torch.Tensor:
+        """
+        Reduces the precision of the input tensor to unsigned 16-bit integer (uint16) to save memory.
+
+        Args:
+            attention_map (Tensor): Input tensor of shape [B, S, S], expected to be in range [0, 1].
+
+        Returns:
+            Tensor: Reduced-precision tensor of shape [B, S, S] in uint16 format.
+        """
+        if torch.any(torch.isnan(attention_map)):
+            logger.warning("Attention map contains NaN values. Clipping to [0, 1] before scaling.")
+            attention_map = attention_map.clamp(0, 1)
+        scaled_attn_maps = (attention_map * 10000).clamp(0, 65535).to(torch.uint16)
+        return scaled_attn_maps
+
 
     def _should_apply_smoothing(self, curr_t: int, total_t: int, regions: List[str]) -> bool:
         """
