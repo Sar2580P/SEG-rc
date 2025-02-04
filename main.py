@@ -7,6 +7,7 @@ import matplotlib.pyplot as plt
 from typing import List
 from PIL import Image
 from tqdm import tqdm
+import textwrap
 
 try:
     pipe = StableDiffusionXLSEGPipeline.from_pretrained(
@@ -20,39 +21,35 @@ except Exception as e:
     print(f"Error: {e}")
 
 
-
-
-
-def create_plot(images: List[Image.Image], titles: List[str],
-                rows: int, cols: int, save_path:str):
-    """
-    :param images: List of PIL images to display.
-    :param titles: List of titles corresponding to each image.
-    :param rows: Number of rows in the plot.
-    :param cols: Number of columns in the plot.
-    """
-    fig, axes = plt.subplots(rows, cols, figsize=(cols * 3, rows * 3))
+def create_plot(images, titles, rows, cols, save_path):
+    fig, axes = plt.subplots(rows, cols, figsize=(cols * 3, rows * 3), constrained_layout=True)
     axes = axes.flatten() if rows * cols > 1 else [axes]  # Flatten axes for easy iteration
 
     for i, ax in enumerate(axes):
         if i < len(images):
             ax.imshow(images[i])
-            ax.set_title(titles[i], fontsize=10)
             ax.axis("off")
+
+            # Wrap text to avoid horizontal overlap
+            wrapped_title = textwrap.fill(titles[i], width=30)  # Adjust width for better readability
+            
+            # Place title as text below the image
+            ax.text(0.5, -0.1, wrapped_title, fontsize=9, ha="center", va="top", transform=ax.transAxes, wrap=True)
         else:
             ax.axis("off")  # Hide extra subplots if images are fewer than grid cells
 
-    plt.tight_layout()
-    plt.savefig(save_path)
+    # Adjust layout to prevent overlapping
+    plt.subplots_adjust(top=0.95, bottom=0.05, wspace=0.3, hspace=0.6)  # Increase wspace & hspace
+    plt.savefig(save_path, bbox_inches="tight", dpi=300)  # Save with proper bounding box
     plt.close()
 
 config = {
 'seed' : 4,
 'num_inference_steps' : 30,
 'seg_applied_layers' : ['down' , 'mid'],
-'guidance_scales' : [0 , 3 , 5],
+'guidance_scales' : [0 , 3],
 'blur_time_regions' : ['begin', 'mid'],
-'seg_scales' : [0, 3 , 5],
+'seg_scales' : [0, 3],
 'seg_blur_sigmas' : [0, 1 ,10, 10000],
 'save_dir' : 'pics',
 'save_attention_maps' :  True,
@@ -85,7 +82,7 @@ if __name__=="__main__":
             titles = []
             for seg_scale in config['seg_scales']:
                 for seg_blur_sigma in config['seg_blur_sigmas']:
-                    if seg_blur_sigma==0 and seg_scale>0:
+                    if seg_blur_sigma==0 and seg_scale>0:   # invalid case
                         continue
                     titles.append(f"seg_blur_sigma-{seg_blur_sigma}_seg_scale-{seg_scale}_guidance_scale-{guidance_scale}")
                     outputs += pipe(

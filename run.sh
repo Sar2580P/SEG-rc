@@ -3,7 +3,7 @@
 # Define arrays for different hyperparameters
 seeds=(42)   # 7 21 24 4 64 90 121 184 256
 blur_time_regions=("begin" "mid" "end" "begin mid end")
-seg_applied_layers=("mid up")
+seg_applied_layers=("mid" "down" "up")
 
 # Logging function
 echo_log() {
