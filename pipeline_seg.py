@@ -50,6 +50,7 @@ from diffusers.pipelines.stable_diffusion_xl.pipeline_output import StableDiffus
 
 from diffusers.models.attention_processor import Attention, AttnProcessor2_0
 from SEGCFGSelfAttn import SEGCFGSelfAttnProcessor
+from AttnProcessor import SelfAttnProcessor
 
 logger = logging.get_logger(__name__)  # pylint: disable=invalid-name
 
@@ -1324,6 +1325,27 @@ class StableDiffusionXLSEGPipeline(
                                 raise ValueError(
                                     f"Invalid layer index: {drop_full_layer}. Available layers are: down, mid and up. If you need to specify each layer index, you can use `seg_applied_layers_index`"
                                 )
+                    else: # my implementatio to save attention maps, same as library based but also saving attn maps
+                        replace_processor = SelfAttnProcessor(save_attention_maps=save_attention_maps)
+                        if self.seg_applied_layers:
+                            drop_full_layers = self.seg_applied_layers
+                            for drop_full_layer in drop_full_layers:
+                                try:
+                                    if drop_full_layer == "down":
+                                        for down_layer in down_layers:
+                                            down_layer.processor = replace_processor
+                                    elif drop_full_layer == "mid":
+                                        for mid_layer in mid_layers:
+                                            mid_layer.processor = replace_processor
+                                    elif drop_full_layer == "up":
+                                        for up_layer in up_layers:
+                                            up_layer.processor = replace_processor
+                                    else:
+                                        raise ValueError(f"Invalid layer type: {drop_full_layer}")
+                                except IndexError:
+                                    raise ValueError(
+                                        f"Invalid layer index: {drop_full_layer}. Available layers are: down, mid and up. If you need to specify each layer index, you can use `seg_applied_layers_index`"
+                                    )
 
                 latent_model_input = self.scheduler.scale_model_input(latent_model_input, t)
 
