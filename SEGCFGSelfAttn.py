@@ -18,6 +18,7 @@ import math
 import numpy as np
 from blur import gaussian_blur_2d
 logger = logging.get_logger(__name__)
+from metrics import AttentionMetricsLogger
 
 class SEGCFGSelfAttnProcessor:
     r"""
@@ -25,7 +26,7 @@ class SEGCFGSelfAttnProcessor:
     """
 
     def __init__(self, curr_iter_idx:int, total_iter:int,blur_time_regions:List,  save_attention_maps:bool=False,
-                 blur_sigma=1.0, do_cfg=True, inf_blur_threshold=9999.0):
+                 blur_sigma=1.0, do_cfg=True, inf_blur_threshold=9999.0, metric_logger:AttentionMetricsLogger=None):
         if not hasattr(F, "scaled_dot_product_attention"):
             raise ImportError("AttnProcessor2_0 requires PyTorch 2.0, to use it, please upgrade PyTorch to 2.0.")
         self.blur_sigma = blur_sigma
@@ -38,8 +39,9 @@ class SEGCFGSelfAttnProcessor:
         self.should_apply_smoothing = self._should_apply_smoothing(curr_iter_idx, total_iter, blur_time_regions)
         self.save_attention_maps = save_attention_maps
         self.attention_maps = []
+        self.metric_logger = metric_logger
 
-    def scaled_dot_product_attention_with_map(self, query, key, value, attention_mask=None, dropout_p=0.0):
+    def get_attention_map(self, query, key, value, attention_mask=None):
         """
         Computes the attention map and returns both the attended output and the attention weights.
 
@@ -64,36 +66,7 @@ class SEGCFGSelfAttnProcessor:
             attn_logits += attention_mask  # Ensure masked positions are not attended
 
         # Compute attention weights (softmax over last dimension)
-        attention_map = F.softmax(attn_logits, dim=-1)  # [B, H, S, S]
-        attention_map = torch.mean(attention_map, dim=1)  # [B, S, S]
-        attention_map = self.reduce_precision(attention_map)   # to reduce memory footprint for attention_map storage
-        # Use PyTorch's built-in function for better efficiency
-        hidden_states = F.scaled_dot_product_attention(
-            query, key, value, attn_mask=attention_mask, dropout_p=dropout_p, is_causal=False
-        )  # [B, H, S, D]
-        return hidden_states, attention_map
-
-
-    def reduce_precision(self, attention_map: torch.Tensor) -> np.ndarray:
-        """
-        Reduces the precision of the input tensor to unsigned 16-bit integer (uint16) and converts it to a NumPy array.
-
-        Args:
-            attention_map (Tensor): Input tensor of shape [B, S, S], expected to be in range [0, 1].
-
-        Returns:
-            np.ndarray: Reduced-precision NumPy array of shape [B, S, S] in uint16 format.
-        """
-        if torch.any(torch.isnan(attention_map)):
-            logger.warning("Attention map contains NaN values. Clipping to [0, 1] before scaling.")
-            attention_map = attention_map.clamp(0, 1)
-
-        # Scale and convert to uint16
-        scaled_attn_maps = (attention_map * 10000).clamp(0, 65535).to(torch.uint16)
-
-        # Convert to NumPy and return
-        return scaled_attn_maps.cpu().numpy().astype(np.uint16)
-
+        return  attn_logits
 
 
     def _should_apply_smoothing(self, curr_t: int, total_t: int, regions: List[str]) -> bool:
@@ -204,16 +177,20 @@ class SEGCFGSelfAttnProcessor:
                 query_ptb = query_ptb.view(batch_size//2, attn.heads, head_dim, height * width).permute(0, 1, 3, 2)
                 query = torch.cat((query_org, query_ptb), dim=0)
 
-        if not self.save_attention_maps:
-            hidden_states = F.scaled_dot_product_attention(
+        hidden_states = F.scaled_dot_product_attention(
                 query, key, value, attn_mask=attention_mask, dropout_p=0.0, is_causal=False,
             )
-        else:
-            hidden_states, attention_map = self.scaled_dot_product_attention_with_map(
+        if self.save_attention_maps or self.metric_logger is not None:            
+            attention_map = self.get_attention_map(
                 query, key, value, attention_mask, dropout_p=0.0
             )
-            if attention_map.shape[1]<=1024 and attention_map.shape[2]<=1024:
-                self.attention_maps.append(attention_map)
+            self.metric_logger.log_metrics(attention_map)
+            if self.save_attention_maps and attention_map.shape[-1]<=1024:
+                # STEP-1: concat keys, queries along last dimension, cast to float32
+                # STEP-2: save the concatenated tensor
+                concatenated_q_k =  torch.cat([query, key], dim=-1).cpu().numpy().astype(np.float32)
+                self.attention_maps.append(concatenated_q_k)
+                
         hidden_states = hidden_states.transpose(1, 2).reshape(batch_size, -1, attn.heads * head_dim)
         hidden_states = hidden_states.to(query.dtype)
 

@@ -1,5 +1,5 @@
-save_attn_map: !!bool False
 seed: 42
 num_inference_steps: 30
 seg_applied_layers: [up]
 blur_time_regions: [begin, mid, end]
+metric_tracked_block: "down"

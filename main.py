@@ -52,9 +52,10 @@ config = {
 'seg_scales' : [0, 3],
 'seg_blur_sigmas' : [0, 1 ,10, 10000],
 'save_dir' : 'pics',
-'save_attention_maps' :  True,
+'save_attention_maps' :  False,
 'atten_save_dir' : 'results/attn_maps',
-'sample_ct_attn_maps' :  3
+'sample_ct_attn_maps' :  3, 
+'should_log_metrics' : True
 }
 
 _config = read_yaml("config.yaml")
@@ -77,6 +78,7 @@ os.makedirs(ATTN_SAVE_DIR, exist_ok=True)
 if __name__=="__main__":
     for prompt in prompts:
         generator = torch.Generator(device="cuda").manual_seed(config["seed"])
+        generator.seed()
         for guidance_scale in tqdm(config['guidance_scales'], desc="guidance_scales"):
             outputs =[]
             titles = []
@@ -89,6 +91,8 @@ if __name__=="__main__":
                             [prompt],
                             num_inference_steps=config['num_inference_steps'],
                             guidance_scale=guidance_scale,
+                            should_log_metrics = config['should_log_metrics'],
+                            metric_tracked_block = config['metric_tracked_block'],
                             seg_scale=seg_scale,
                             seg_blur_sigma=seg_blur_sigma,
                             seg_applied_layers=config['seg_applied_layers'],
