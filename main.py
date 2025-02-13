@@ -32,7 +32,7 @@ def create_plot(images, titles, rows, cols, save_path):
 
             # Wrap text to avoid horizontal overlap
             wrapped_title = textwrap.fill(titles[i], width=30)  # Adjust width for better readability
-            
+
             # Place title as text below the image
             ax.text(0.5, -0.1, wrapped_title, fontsize=9, ha="center", va="top", transform=ax.transAxes, wrap=True)
         else:
@@ -51,20 +51,20 @@ config = {
 'blur_time_regions' : ['begin', 'mid'],
 'seg_scales' : [0, 3],
 'seg_blur_sigmas' : [0, 1 ,10, 10000],
-'save_dir' : 'pics',
+'pics_save_dir' : 'results/pics',
 'save_attention_maps' :  False,
 'atten_save_dir' : 'results/attn_maps',
-'sample_ct_attn_maps' :  3, 
+'sample_ct_attn_maps' :  3,
 'should_log_metrics' : True
 }
 
 _config = read_yaml("config.yaml")
 prompts = [
-"",
+"a jellyfish playing the drums in an underwater concert",
 ]
 config.update(_config)
 
-PICS_SAVE_DIR = os.path.join(config['save_dir'], f"seed-{config['seed']}" ,
+PICS_SAVE_DIR = os.path.join(config['pics_save_dir'], f"seed-{config['seed']}" ,
                          f"blur_regions-{'___'.join(config['blur_time_regions'])})",
                          f"seg_applied_layers-{'___'.join(config['seg_applied_layers'])}")
 ATTN_SAVE_DIR = os.path.join(config['atten_save_dir'], f"seed-{config['seed']}" ,
@@ -86,6 +86,8 @@ if __name__=="__main__":
                 for seg_blur_sigma in config['seg_blur_sigmas']:
                     if seg_blur_sigma==0 and seg_scale>0:   # invalid case
                         continue
+                    elif seg_scale==0 and guidance_scale==0:  #simplest  case, skipping...
+                        continue
                     titles.append(f"seg_blur_sigma-{seg_blur_sigma}_seg_scale-{seg_scale}_guidance_scale-{guidance_scale}")
                     outputs += pipe(
                             [prompt],
@@ -93,6 +95,7 @@ if __name__=="__main__":
                             guidance_scale=guidance_scale,
                             should_log_metrics = config['should_log_metrics'],
                             metric_tracked_block = config['metric_tracked_block'],
+                            metric_save_dir = f"results/metrics/seed-{config['seed']}",
                             seg_scale=seg_scale,
                             seg_blur_sigma=seg_blur_sigma,
                             seg_applied_layers=config['seg_applied_layers'],

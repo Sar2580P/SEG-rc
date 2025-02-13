@@ -861,6 +861,7 @@ class StableDiffusionXLSEGPipeline(
         timesteps: List[int] = None,
         should_log_metrics: bool = False,
         metric_tracked_block: Optional[str] = None, # must be one of ['down', 'mid', 'up']
+        metric_save_dir:str =None,
         denoising_end: Optional[float] = None,
         guidance_scale: float = 5.0,
         seg_scale: float = 3.0,
@@ -1257,23 +1258,20 @@ class StableDiffusionXLSEGPipeline(
                         up_layers.append(module)
                     else:
                         raise ValueError(f"Invalid layer type: {layer_type}")
-        
+
         # logging metrics for tracking attention maps
-        print(f"down_layers: {down_layers}")
-        print(f"mid_layers: {mid_layers}")
-        print(f"up_layers: {up_layers}")
-        if should_log_metrics: 
+        if should_log_metrics:
             assert metric_tracked_block in ['down', 'mid', 'up'], f"Invalid block type: {metric_tracked_block}, must be one of ['down', 'mid', 'up']"
-            metric_save_dir = os.path.join("results/metrics", f"seed_{generator.initial_seed()}", 
-                                        f"segSigma_{seg_blur_sigma}__segScale_{seg_scale}__guidanceScale_{guidance_scale}", 
-                                        f"segAppliedLayers_{'('+'_'.join(seg_applied_layers)+')' if seg_applied_layers else 'None'}", 
+            metric_save_dir = os.path.join(metric_save_dir,
+                                        f"segSigma_{seg_blur_sigma}__segScale_{seg_scale}__guidanceScale_{guidance_scale}",
+                                        f"segAppliedLayers_{'('+'_'.join(seg_applied_layers)+')' if seg_applied_layers else 'None'}",
                                         f"blurRegions_{'('+'_'.join(blur_time_regions)+')' if blur_time_regions else 'None'}")
             '''
             sample save dir: seed_42/segSigma_9999999.0__segScale_3.0__guidanceScale_5.0/segAppliedLayers_(mid_up)/blurRegions_(mid)
             '''
-            metric_logger = AttentionMetricsLogger(save_dir=metric_save_dir , 
+            metric_logger = AttentionMetricsLogger(save_dir=metric_save_dir ,
                                                 block_type=metric_tracked_block)
-        else: 
+        else:
             metric_logger = None
 
         self._num_timesteps = len(timesteps)
@@ -1310,13 +1308,13 @@ class StableDiffusionXLSEGPipeline(
                     replace_processor = SEGCFGSelfAttnProcessor(blur_sigma=seg_blur_sigma,
                                                                 do_cfg=self.do_classifier_free_guidance,
                                                                 curr_iter_idx = len(timesteps) - i - 1, total_iter=len(timesteps),
-                                                                blur_time_regions=blur_time_regions, 
+                                                                blur_time_regions=blur_time_regions,
                                                                 save_attention_maps=save_attention_maps)
 
                     replace_processor_with_metric_tracker = SEGCFGSelfAttnProcessor(blur_sigma=seg_blur_sigma,
                                                                 do_cfg=self.do_classifier_free_guidance,
                                                                 curr_iter_idx = len(timesteps) - i - 1, total_iter=len(timesteps),
-                                                                blur_time_regions=blur_time_regions, 
+                                                                blur_time_regions=blur_time_regions,
                                                                 save_attention_maps=save_attention_maps, metric_logger = metric_logger)
                     if self.seg_applied_layers_index:
                         drop_layers = self.seg_applied_layers_index
@@ -1357,7 +1355,7 @@ class StableDiffusionXLSEGPipeline(
                     else: # my implementation to save attention maps, same as library based but also saving attn maps
                         replace_processor = SelfAttnProcessor(save_attention_maps=save_attention_maps)
                         replace_processor_with_metric_tracker = SelfAttnProcessor(save_attention_maps=save_attention_maps, metric_logger = metric_logger)
-                        
+
                         if self.seg_applied_layers:
                             drop_full_layers = self.seg_applied_layers
                             for drop_full_layer in drop_full_layers:

@@ -180,9 +180,9 @@ class SEGCFGSelfAttnProcessor:
         hidden_states = F.scaled_dot_product_attention(
                 query, key, value, attn_mask=attention_mask, dropout_p=0.0, is_causal=False,
             )
-        if self.save_attention_maps or self.metric_logger is not None:            
+        if self.save_attention_maps or self.metric_logger is not None:
             attention_map = self.get_attention_map(
-                query, key, value, attention_mask, dropout_p=0.0
+                query, key, value, attention_mask
             )
             self.metric_logger.log_metrics(attention_map)
             if self.save_attention_maps and attention_map.shape[-1]<=1024:
@@ -190,7 +190,7 @@ class SEGCFGSelfAttnProcessor:
                 # STEP-2: save the concatenated tensor
                 concatenated_q_k =  torch.cat([query, key], dim=-1).cpu().numpy().astype(np.float32)
                 self.attention_maps.append(concatenated_q_k)
-                
+
         hidden_states = hidden_states.transpose(1, 2).reshape(batch_size, -1, attn.heads * head_dim)
         hidden_states = hidden_states.to(query.dtype)
 

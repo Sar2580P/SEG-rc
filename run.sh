@@ -22,7 +22,7 @@ for seed in "${seeds[@]}"; do
         for seg_applied_layer in "${seg_applied_layers[@]}"; do
             for metric_block in "${metric_tracked_block[@]}"; do
                 config_file="config.yaml"
-                
+
                 echo_log "Updating config: $config_file"
                 {
                     cat > "$config_file" <<EOL
@@ -31,7 +31,7 @@ seed: $seed
 num_inference_steps: 30
 seg_applied_layers: [$(echo "$seg_applied_layer" | sed 's/ /, /g')]
 blur_time_regions: [$(echo "$blur_time_region" | sed 's/ /, /g')]
-metric_tracked_block: [$(echo "$metric_block" | sed 's/ /, /g')]
+metric_tracked_block: $(echo "$metric_block" | sed 's/ /, /g')
 EOL
                 } || handle_error
 
