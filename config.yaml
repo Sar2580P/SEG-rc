@@ -1,6 +1,6 @@
 save_attn_map: !!bool False
 seed: 721
 num_inference_steps: 30
-seg_applied_layers: [mid]
+seg_applied_layers: [down]
 blur_time_regions: [begin]
-metric_tracked_block: down
+metric_tracked_block: mid

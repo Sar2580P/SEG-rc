@@ -77,8 +77,6 @@ os.makedirs(ATTN_SAVE_DIR, exist_ok=True)
 
 if __name__=="__main__":
     for prompt in prompts:
-        generator = torch.Generator(device="cuda").manual_seed(config["seed"])
-        generator.seed()
         for guidance_scale in tqdm(config['guidance_scales'], desc="guidance_scales"):
             outputs =[]
             titles = []
@@ -86,9 +84,14 @@ if __name__=="__main__":
                 for seg_blur_sigma in config['seg_blur_sigmas']:
                     if seg_blur_sigma==0 and seg_scale>0:   # invalid case
                         continue
-                    elif seg_scale==0 and guidance_scale==0:  #simplest  case, skipping...
-                        continue
+                    if guidance_scale==0:
+                        prompt = ""
+
                     titles.append(f"seg_blur_sigma-{seg_blur_sigma}_seg_scale-{seg_scale}_guidance_scale-{guidance_scale}")
+
+                    generator = torch.Generator(device="cuda").manual_seed(config["seed"])
+                    generator.seed()
+
                     outputs += pipe(
                             [prompt],
                             num_inference_steps=config['num_inference_steps'],
