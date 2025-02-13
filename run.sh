@@ -1,7 +1,7 @@
 #!/bin/bash
 
 # Define arrays for different hyperparameters
-seeds=(721 221 94 42)
+seeds=(1828499611299255970 5867991739709137916 97 42)
 blur_time_regions=("begin" "mid" "end" "begin mid end")
 seg_applied_layers=("mid" "down" "up" "mid down" "mid up" "down up" "mid down up")
 metric_tracked_block=("mid" "down" "up")

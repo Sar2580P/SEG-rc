@@ -4,8 +4,6 @@ from utils import read_yaml
 import os
 from typing import List
 import matplotlib.pyplot as plt
-from typing import List
-from PIL import Image
 from tqdm import tqdm
 import textwrap
 
@@ -55,7 +53,8 @@ config = {
 'save_attention_maps' :  False,
 'atten_save_dir' : 'results/attn_maps',
 'sample_ct_attn_maps' :  3,
-'should_log_metrics' : True
+'should_log_metrics' : True,
+'metric_save_dir' : 'results/metrics',
 }
 
 _config = read_yaml("config.yaml")
@@ -65,11 +64,11 @@ prompts = [
 config.update(_config)
 
 PICS_SAVE_DIR = os.path.join(config['pics_save_dir'], f"seed-{config['seed']}" ,
-                         f"blur_regions-{'___'.join(config['blur_time_regions'])})",
-                         f"seg_applied_layers-{'___'.join(config['seg_applied_layers'])}")
+                         f"blur_regions-({'_'.join(config['blur_time_regions'])})",
+                         f"seg_applied_layers-({'_'.join(config['seg_applied_layers'])})")
 ATTN_SAVE_DIR = os.path.join(config['atten_save_dir'], f"seed-{config['seed']}" ,
-                         f"blur_regions-{'___'.join(config['blur_time_regions'])})",
-                         f"seg_applied_layers-{'___'.join(config['seg_applied_layers'])}")
+                         f"blur_regions-({'_'.join(config['blur_time_regions'])})",
+                         f"seg_applied_layers-({'_'.join(config['seg_applied_layers'])})")
 os.makedirs(PICS_SAVE_DIR, exist_ok=True)
 os.makedirs(ATTN_SAVE_DIR, exist_ok=True)
 
@@ -90,7 +89,7 @@ if __name__=="__main__":
                     titles.append(f"seg_blur_sigma-{seg_blur_sigma}_seg_scale-{seg_scale}_guidance_scale-{guidance_scale}")
 
                     generator = torch.Generator(device="cuda").manual_seed(config["seed"])
-                    generator.seed()
+                    # generator.seed()  # This will REPLACE the manually set seed with a new random one!
 
                     outputs += pipe(
                             [prompt],
@@ -98,7 +97,7 @@ if __name__=="__main__":
                             guidance_scale=guidance_scale,
                             should_log_metrics = config['should_log_metrics'],
                             metric_tracked_block = config['metric_tracked_block'],
-                            metric_save_dir = f"results/metrics/seed-{config['seed']}",
+                            metric_save_dir = os.path.join(config['metric_save_dir'] , f"seed-{config['seed']}"),
                             seg_scale=seg_scale,
                             seg_blur_sigma=seg_blur_sigma,
                             seg_applied_layers=config['seg_applied_layers'],
@@ -110,7 +109,7 @@ if __name__=="__main__":
                             sample_ct_attn_maps = config['sample_ct_attn_maps']
 
                         ).images
-            save_path = os.path.join(PICS_SAVE_DIR, f"guidance_scales-{guidance_scale}.png")
+            save_path = os.path.join(PICS_SAVE_DIR, f"metric_tracked_block-{config['metric_tracked_block']}__guidance_scales-{guidance_scale}.png")
             create_plot(outputs, titles,  rows=len(config['seg_scales']),
                         cols=len(config['seg_blur_sigmas']), save_path=save_path)
 
