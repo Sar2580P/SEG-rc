@@ -45,7 +45,7 @@ config = {
 'seed' : 4,
 'num_inference_steps' : 30,
 'seg_applied_layers' : ['down' , 'mid'],
-'guidance_scales' : [0 , 3],
+'guidance_scales' : [0 , 5],
 'blur_time_regions' : ['begin', 'mid'],
 'seg_scales' : [0, 3],
 'seg_blur_sigmas' : [0, 1 ,10, 10000],
@@ -109,7 +109,7 @@ if __name__=="__main__":
                             sample_ct_attn_maps = config['sample_ct_attn_maps']
 
                         ).images
-            save_path = os.path.join(PICS_SAVE_DIR, f"metric_tracked_block-{config['metric_tracked_block']}__guidance_scales-{guidance_scale}.png")
+            save_path = os.path.join(PICS_SAVE_DIR, f"guidance_scales-{guidance_scale}.png")
             create_plot(outputs, titles,  rows=len(config['seg_scales']),
                         cols=len(config['seg_blur_sigmas']), save_path=save_path)
 
