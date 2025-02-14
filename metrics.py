@@ -211,8 +211,10 @@ def concatenate_metric_files(src_dir: str, dest_dir: str, block_type: str, layer
     os.makedirs(dest_dir, exist_ok=True)
 
     # Construct the glob pattern to match files.
-    pattern = os.path.join(src_dir, f"{block_type}_block-{layer_idx}_layer-*_time_stamp.npy")
+    pattern = os.path.join(src_dir, f"{block_type}_block-{layer_idx}_layer-*_timestamp.npy")
+    print("pattern:", pattern)
     file_list: List[str] = glob.glob(pattern)
+    print("files: ", file_list)
 
     if not file_list:
         print(f"No files found for {block_type} block, layer {layer_idx} in {src_dir}.")
@@ -267,3 +269,21 @@ def concatenate_metric_files(src_dir: str, dest_dir: str, block_type: str, layer
     # Save the concatenated array.
     np.save(dest_path, concatenated)
     print(f"Saved concatenated metrics for {block_type} block, layer {layer_idx} at {dest_path}")
+
+
+# iterate over all the files in directory results/metrics/seed-97 with their full path relative to results/metrics/seed-97
+def stitch_time_stamps(src_dir, dest_dir):
+    for folder1 in glob.glob(src_dir+"/*"):
+        folder1_name = folder1.split("/")[-1]
+        for folder2 in glob.glob(folder1 + "/*"):
+            folder2_name = folder2.split("/")[-1]
+            for folder3 in glob.glob(folder2 + "/*"):
+                folder3_name = folder3.split("/")[-1]
+                
+                dir1 , dir2 = folder3 , os.path.join(dest_dir, folder1_name, folder2_name, folder3_name)
+                for block_type in ["down", "mid", "up"]:
+                    for layer_idx in range(1, 4):
+                        concatenate_metric_files(dir1, dir2, block_type, layer_idx)
+       
+if __name__=="__main__":     
+    stitch_time_stamps("results/metrics/seed-97", "results/metrics/seed-97-time-stitched")
