@@ -1,11 +1,11 @@
 #!/bin/bash
 
 # Define the variables
-seeds=(42 1828499611299255970 97)
+seeds=(42)     #  1828499611299255970 97
 blur_time_regions=("begin")  # "mid" "end" "begin mid end"
 seg_applied_layers=("mid")  # "down" "up" "mid down" "mid up" "down up" "mid down up"
-metric_tracked_block=("mid" "down" "up")
-num_inference_steps=(20 30 40)
+metric_tracked_block=("mid")   #  "down" "up"
+num_inference_steps=(30)    # 20 30 40
 blurring_technique=("gaussian_3_10" "gaussian_3_1000" "gaussian_-1_10" "ema_0.8_0.98_linear" "ema_0.8_0.98_quadratic" "ema_0.8_0.98_cosine" "temperatureAnnealing_linear_2" "temperatureAnnealing_cosine_2" "temperatureAnnealing_exponential_2")
 guidance_scale=(0 5)
 seg_scale=(0 3)
