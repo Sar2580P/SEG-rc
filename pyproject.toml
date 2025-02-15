@@ -17,6 +17,11 @@ jq = "^1.8.0"
 ipykernel = "^6.29.5"
 blosc = "^1.11.2"
 kaggle = "^1.6.17"
+umap = "^0.1.1"
+scikit-learn = "^1.6.1"
+seaborn = "^0.13.2"
+hdbscan = "^0.8.40"
+omegaconf = "^2.3.0"
 
 
 [tool.poetry.group.dev.dependencies]

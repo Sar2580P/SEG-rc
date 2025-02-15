@@ -1,4 +1,3 @@
-echo "Jai Shree Ram"
 user_name=$(whoami)
 path_to_env="/home/${user_name}/.cache/pypoetry/virtualenvs/seg-sdxl-mlrc-*"
 if [ -d $path_to_env ]; then

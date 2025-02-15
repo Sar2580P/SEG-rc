@@ -16,27 +16,19 @@ from diffusers.utils import (
 )
 import math
 import numpy as np
-from blur import gaussian_blur_2d
+from diffusion_utils.blur import gaussian_blur_2d
 logger = logging.get_logger(__name__)
-from metrics import AttentionMetricsLogger
+from diffusion_utils.metrics import AttentionMetricsLogger
 
-class SEGCFGSelfAttnProcessor:
+class SelfAttnProcessor:
     r"""
     Processor for implementing scaled dot-product attention (enabled by default if you're using PyTorch 2.0).
     """
 
-    def __init__(self, curr_iter_idx:int, total_iter:int,blur_time_regions:List,  save_attention_maps:bool=False,
-                 blur_sigma=1.0, do_cfg=True, inf_blur_threshold=9999.0, metric_logger:AttentionMetricsLogger=None):
+    def __init__(self, save_attention_maps:bool=False, metric_logger:AttentionMetricsLogger=None):
         if not hasattr(F, "scaled_dot_product_attention"):
             raise ImportError("AttnProcessor2_0 requires PyTorch 2.0, to use it, please upgrade PyTorch to 2.0.")
-        self.blur_sigma = blur_sigma
-        self.do_cfg = do_cfg
-        if self.blur_sigma > inf_blur_threshold:
-            self.inf_blur = True
-        else:
-            self.inf_blur = False
 
-        self.should_apply_smoothing = self._should_apply_smoothing(curr_iter_idx, total_iter, blur_time_regions)
         self.save_attention_maps = save_attention_maps
         self.attention_maps = []
         self.metric_logger = metric_logger
@@ -65,33 +57,7 @@ class SEGCFGSelfAttnProcessor:
         if attention_mask is not None:
             attn_logits += attention_mask  # Ensure masked positions are not attended
 
-        # Compute attention weights (softmax over last dimension)
-        return  attn_logits
-
-
-    def _should_apply_smoothing(self, curr_t: int, total_t: int, regions: List[str]) -> bool:
-        """
-        Determines whether smoothing should be applied based on the current timestamp and regions.
-
-        :param curr_t: Current timestamp (in range 0 to total_t-1)
-        :param total_t: Total number of timestamps
-        :param regions: List containing 'mid', 'begin', 'end' to specify applicable regions
-        :return: True if curr_t lies within the specified regions, else False
-        """
-        third = total_t // 3
-        apply_smoothing = False
-
-        if 'begin' in regions and curr_t >= 2 * third:
-            apply_smoothing = True
-        elif 'mid' in regions and third <= curr_t < 2 * third:
-            apply_smoothing = True
-        elif 'end' in regions and curr_t < third:
-            apply_smoothing = True
-
-        logger.info(f"Smoothing {'applied' if apply_smoothing else 'not applied'} \
-                    at curr_t={curr_t}, total_t={total_t}, regions={regions}")
-
-        return apply_smoothing
+        return attn_logits
 
     def __call__(
         self,
@@ -151,46 +117,21 @@ class SEGCFGSelfAttnProcessor:
         # the output of sdp = (batch, num_heads, seq_len, head_dim)
         # TODO: add support for attn.scale when we move to Torch 2.1
         height = width = math.isqrt(query.shape[2])
-        if self.should_apply_smoothing:
-            if self.do_cfg:
-                query_uncond, query_org, query_ptb = query.chunk(3)
-                query_ptb = query_ptb.permute(0, 1, 3, 2).view(batch_size//3, attn.heads * head_dim, height, width)
-
-                if not self.inf_blur:
-                    kernel_size = math.ceil(6 * self.blur_sigma) + 1 - math.ceil(6 * self.blur_sigma) % 2
-                    query_ptb = gaussian_blur_2d(query_ptb, kernel_size, self.blur_sigma)
-                else:
-                    query_ptb[:] = query_ptb.mean(dim=(-2, -1), keepdim=True)
-
-                query_ptb = query_ptb.view(batch_size//3, attn.heads, head_dim, height * width).permute(0, 1, 3, 2)
-                query = torch.cat((query_uncond, query_org, query_ptb), dim=0)
-            else:
-                query_org, query_ptb = query.chunk(2)
-                query_ptb = query_ptb.permute(0, 1, 3, 2).view(batch_size//2, attn.heads * head_dim, height, width)
-
-                if not self.inf_blur:
-                    kernel_size = math.ceil(6 * self.blur_sigma) + 1 - math.ceil(6 * self.blur_sigma) % 2
-                    query_ptb = gaussian_blur_2d(query_ptb, kernel_size, self.blur_sigma)
-                else:
-                    query_ptb[:] = query_ptb.mean(dim=(-2, -1), keepdim=True)
-
-                query_ptb = query_ptb.view(batch_size//2, attn.heads, head_dim, height * width).permute(0, 1, 3, 2)
-                query = torch.cat((query_org, query_ptb), dim=0)
-
         hidden_states = F.scaled_dot_product_attention(
                 query, key, value, attn_mask=attention_mask, dropout_p=0.0, is_causal=False,
             )
+        
         if self.save_attention_maps or self.metric_logger is not None:
             attention_map = self.get_attention_map(
                 query, key, value, attention_mask
             )
             self.metric_logger.log_metrics(attention_map)
-            if self.save_attention_maps and attention_map.shape[-1]<=1024:
+            if self.save_attention_maps and  attention_map.shape[-1]<=1024 :
                 # STEP-1: concat keys, queries along last dimension, cast to float32
                 # STEP-2: save the concatenated tensor
                 concatenated_q_k =  torch.cat([query, key], dim=-1).cpu().numpy().astype(np.float32)
                 self.attention_maps.append(concatenated_q_k)
-
+                
         hidden_states = hidden_states.transpose(1, 2).reshape(batch_size, -1, attn.heads * head_dim)
         hidden_states = hidden_states.to(query.dtype)
 

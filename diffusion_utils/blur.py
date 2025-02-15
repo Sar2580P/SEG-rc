@@ -77,28 +77,6 @@ def gaussian_blur_2d(img: Tensor, kernel_size: int, sigma: float) -> Tensor:
     img_padded = F.pad(img, padding, mode="reflect")
     return F.conv2d(img_padded, kernel2d, groups=C)
 
-#______________________________________________________________________________________________________
-
-def ema_smoothing_simple(query: torch.Tensor, alpha: float = 0.9) -> torch.Tensor:
-    """
-    Applies EMA smoothing along the token dimension (index 2) for a given tensor.
-    
-    Each (batch, attn_head, embed_dim) sequence (i.e. each slice along dimensions 0, 1, and 3)
-    is processed independently along the token dimension (index 2). The recurrence is:
-        y_0 = x_0,
-        y_t = alpha * y_{t-1} + (1 - alpha) * x_t, for t >= 1.
-    
-    This implementation uses a simple Python loop over the token dimension.
-
-    :param query: Input tensor of shape (batch, attn_heads, token_count, embed_dim).
-    :param alpha: EMA smoothing factor (a float between 0 and 1). A higher alpha gives more weight to past values.
-    :return: A tensor of the same shape as 'query', where each sequence has been smoothed along the token dimension.
-    """
-    out = query.clone()
-    B, H, T, D = query.shape
-    for t in range(1, T):
-        out[:, :, t, :] = alpha * out[:, :, t - 1, :] + (1 - alpha) * query[:, :, t, :]
-    return out
 
 #______________________________________________________________________________________________________
 def ema_smoothing_time_dependent(
@@ -133,17 +111,17 @@ def ema_smoothing_time_dependent(
 
     # Loop over token dimension
     for t in range(1, T):
-        alpha_t = alpha_fn(t, T)
+        alpha_t = alpha_fn(t=t, T=T)
         out[:, :, t, :] = alpha_t * out[:, :, t - 1, :] + (1 - alpha_t) * query[:, :, t, :]
 
     return out
 
 
-def alpha_increasing_torch(
+def alpha_increasing(
     t: torch.Tensor, 
     T: torch.Tensor, 
-    alpha_start: torch.Tensor = torch.tensor(0.75, dtype=torch.float64),
-    alpha_end: torch.Tensor = torch.tensor(0.99, dtype=torch.float64),
+    alpha_start: torch.Tensor = torch.tensor(0.75),
+    alpha_end: torch.Tensor = torch.tensor(0.99),
     mode: str = "linear"
 ) -> torch.Tensor:
     """
@@ -186,7 +164,7 @@ def alpha_increasing_torch(
 def time_dependent_scaling(
     t: float, 
     T: float, 
-    d: float,
+    query: torch.Tensor,
     scheme: str = "linear", 
     f0: float = 1.5, 
     **kwargs: Any
@@ -198,11 +176,7 @@ def time_dependent_scaling(
     Supported schemes:
       - "linear": f(t) = 1 + (f0 - 1) * (1 - t/T)
       - "cosine": f(t) = 1 + (f0 - 1) * 0.5 * (1 + cos(pi * t / T))
-      - "inverse": f(t) = 1 + (f0 - 1) / (1 + t/T)
       - "exponential": f(t) = 1 + (f0 - 1) * exp(-lambda_ * t / T) (default lambda_=5)
-      - "step": f(t) = f0 if t < T/2 else 1.0
-      - "sigmoid": f(t) = 1 + (f0 - 1) / (1 + exp(k * (t/T - 0.5))) (default k=10)
-      - "polynomial": f(t) = 1 + (f0 - 1) * ((T - t)/T)^p (default p=2)
     
     :param t: Current time step (must be in [0, T]).
     :param T: Total time steps.
@@ -222,20 +196,11 @@ def time_dependent_scaling(
         f_t = 1 + (f0 - 1) * (1 - t / T)
     elif scheme == "cosine":
         f_t = 1 + (f0 - 1) * 0.5 * (1 + math.cos(math.pi * t / T))
-    elif scheme == "inverse":
-        f_t = 1 + (f0 - 1) / (1 + t / T)
     elif scheme == "exponential":
         lambda_ = kwargs.get("lambda_", 10)
         f_t = 1 + (f0 - 1) * math.exp(-lambda_ * t / T)
-    elif scheme == "step":
-        f_t = f0 if t < T / 2 else 1.0
-    elif scheme == "sigmoid":
-        k = kwargs.get("k", 10.0)
-        f_t = 1 + (f0 - 1) / (1 + math.exp(k * (t / T - 0.5)))
-    elif scheme == "polynomial":
-        p = kwargs.get("p", 2.0)
-        f_t = 1 + (f0 - 1) * ((T - t) / T) ** p
     else:
         raise ValueError(f"Unknown scheme: {scheme}")
-        
-    return math.sqrt(d) * f_t
+    
+    dim = query.shape[-1]
+    return math.sqrt(dim) * f_t
