@@ -25,39 +25,11 @@ class SelfAttnProcessor:
     Processor for implementing scaled dot-product attention (enabled by default if you're using PyTorch 2.0).
     """
 
-    def __init__(self, save_attention_maps:bool=False, metric_logger:AttentionMetricsLogger=None):
+    def __init__(self, metric_logger:AttentionMetricsLogger=None):
         if not hasattr(F, "scaled_dot_product_attention"):
             raise ImportError("AttnProcessor2_0 requires PyTorch 2.0, to use it, please upgrade PyTorch to 2.0.")
 
-        self.save_attention_maps = save_attention_maps
-        self.attention_maps = []
         self.metric_logger = metric_logger
-
-    def get_attention_map(self, query, key, value, attention_mask=None):
-        """
-        Computes the attention map and returns both the attended output and the attention weights.
-
-        Args:
-            query (Tensor): Query tensor of shape [B, H, S, D]
-            key (Tensor): Key tensor of shape [B, H, S, D]
-            value (Tensor): Value tensor of shape [B, H, S, D]
-            attention_mask (Tensor, optional): Mask tensor of shape [B, 1, S, S] or None
-            dropout_p (float): Dropout probability
-
-        Returns:
-            hidden_states (Tensor): Attended output of shape [B, H, S, D]
-            attention_map (Tensor): Attention weights of shape [B, H, S, S]
-        """
-        d_k = query.shape[-1]
-
-        # Compute attention scores (logits)
-        attn_logits = torch.matmul(query, key.transpose(-2, -1)) / d_k**0.5  # [B, H, S, S]
-
-        # Apply attention mask if provided
-        if attention_mask is not None:
-            attn_logits += attention_mask  # Ensure masked positions are not attended
-
-        return attn_logits
 
     def __call__(
         self,
@@ -120,17 +92,6 @@ class SelfAttnProcessor:
         hidden_states = F.scaled_dot_product_attention(
                 query, key, value, attn_mask=attention_mask, dropout_p=0.0, is_causal=False,
             )
-        
-        if self.save_attention_maps or self.metric_logger is not None:
-            attention_map = self.get_attention_map(
-                query, key, value, attention_mask
-            )
-            self.metric_logger.log_metrics(attention_map)
-            if self.save_attention_maps and  attention_map.shape[-1]<=1024 :
-                # STEP-1: concat keys, queries along last dimension, cast to float32
-                # STEP-2: save the concatenated tensor
-                concatenated_q_k =  torch.cat([query, key], dim=-1).cpu().numpy().astype(np.float32)
-                self.attention_maps.append(concatenated_q_k)
                 
         hidden_states = hidden_states.transpose(1, 2).reshape(batch_size, -1, attn.heads * head_dim)
         hidden_states = hidden_states.to(query.dtype)
@@ -146,6 +107,9 @@ class SelfAttnProcessor:
         if attn.residual_connection:
             hidden_states = hidden_states + residual
 
+        if self.metric_logger is not None:
+            self.metric_logger.log_metrics(Q1= residual, Q2=hidden_states)
+            
         hidden_states = hidden_states / attn.rescale_output_factor
 
         return hidden_states

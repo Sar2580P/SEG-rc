@@ -870,8 +870,6 @@ class StableDiffusionXLSEGPipeline(
         blur_time_regions: List[str] = ['mid'], #['mid', 'start', 'end']
         blurring_technique: str = None, #['gaussian_kernel_sigma' , 'ema_alphaFunc' , 'temperatureAnnealing_method']
         save_attention_maps: bool = False,
-        save_path_attention_maps: str = None,
-        sample_ct_attn_maps : int =0 ,
         negative_prompt: Optional[Union[str, List[str]]] = None,
         negative_prompt_2: Optional[Union[str, List[str]]] = None,
         num_images_per_prompt: Optional[int] = 1,
@@ -1244,9 +1242,6 @@ class StableDiffusionXLSEGPipeline(
             mid_layers = []
             up_layers = []
 
-            down_layers_attention_maps = []
-            mid_layers_attention_maps = []
-            up_layers_attention_maps = []
             for name, module in self.unet.named_modules():
                 if 'attn1' in name and 'to' not in name:
                     layer_type = name.split('.')[0].split('_')[0]
@@ -1262,9 +1257,6 @@ class StableDiffusionXLSEGPipeline(
         # logging metrics for tracking attention maps
         if should_log_metrics:
             assert metric_tracked_block in ['down', 'mid', 'up'], f"Invalid block type: {metric_tracked_block}, must be one of ['down', 'mid', 'up']"
-            metric_save_dir = os.path.join(metric_save_dir,   # TODO : to pass the technique specific params to metric_save_dir
-                                        f"segAppliedLayers_{'('+'_'.join(seg_applied_layers)+')' if seg_applied_layers else 'None'}",
-                                        f"blurRegions_{'('+'_'.join(blur_time_regions)+')' if blur_time_regions else 'None'}")
             metric_logger = AttentionMetricsLogger(save_dir=metric_save_dir ,
                                                 block_type=metric_tracked_block)
         else:
@@ -1272,13 +1264,6 @@ class StableDiffusionXLSEGPipeline(
 
         self._num_timesteps = len(timesteps)
         with self.progress_bar(total=num_inference_steps) as progress_bar:
-
-            # sampling time-stamps at which to save attention maps
-            time_stamps_to_sample_attn_maps = set()
-            if sample_ct_attn_maps > 0:
-                time_stamps_to_sample_attn_maps = set(
-                    [int(i) for i in np.linspace(0, len(timesteps) - 1, sample_ct_attn_maps)]
-                )
             # starting iterative diffusion process
             for i, t in enumerate(timesteps):
                 metric_logger.update_time_stamp(time_stamp=i)  # updating the current time stamp for logging attention maps
@@ -1305,14 +1290,13 @@ class StableDiffusionXLSEGPipeline(
                                                                 do_cfg=self.do_classifier_free_guidance,
                                                                 curr_iter_idx = len(timesteps) - i - 1, total_iter=len(timesteps),
                                                                 blur_time_regions=blur_time_regions,
-                                                                save_attention_maps=save_attention_maps, 
                                                                 blurring_technique = blurring_technique)
 
                     replace_processor_with_metric_tracker = SEGCFGSelfAttnProcessor(
                                                                 do_cfg=self.do_classifier_free_guidance,
                                                                 curr_iter_idx = len(timesteps) - i - 1, total_iter=len(timesteps),
                                                                 blur_time_regions=blur_time_regions,
-                                                                save_attention_maps=save_attention_maps, metric_logger = metric_logger, 
+                                                                metric_logger = metric_logger, 
                                                                 blurring_technique = blurring_technique)
                     if self.seg_applied_layers_index:
                         drop_layers = self.seg_applied_layers_index
@@ -1351,9 +1335,8 @@ class StableDiffusionXLSEGPipeline(
                                     f"Invalid layer index: {drop_full_layer}. Available layers are: down, mid and up. If you need to specify each layer index, you can use `seg_applied_layers_index`"
                                 )
                     else: # my implementation to save attention maps, same as library based but also saving attn maps
-                        replace_processor = SelfAttnProcessor(save_attention_maps=save_attention_maps)
-                        replace_processor_with_metric_tracker = SelfAttnProcessor(save_attention_maps=save_attention_maps, 
-                                                                                  metric_logger = metric_logger)
+                        replace_processor = SelfAttnProcessor()
+                        replace_processor_with_metric_tracker = SelfAttnProcessor(metric_logger = metric_logger)
 
                         if self.seg_applied_layers:
                             drop_full_layers = self.seg_applied_layers
@@ -1391,15 +1374,6 @@ class StableDiffusionXLSEGPipeline(
                     added_cond_kwargs=added_cond_kwargs,
                     return_dict=False,
                 )[0]
-
-                if self.do_seg and save_attention_maps and (i in time_stamps_to_sample_attn_maps):
-                    assert replace_processor.save_attention_maps, f"save_attention_maps is set to True but the processor has not been set to save attention maps"
-                    d, m , u = len(down_layers), len(mid_layers), len(up_layers)
-                    attention_maps = replace_processor.attention_maps
-                    up_layers_attention_maps.extend(attention_maps[:d])
-                    mid_layers_attention_maps.extend(attention_maps[d:d+m])
-                    down_layers_attention_maps.extend(attention_maps[d+m:d+m+u])
-                    replace_processor.attention_maps = []
 
                 # perform guidance
                 if self.do_classifier_free_guidance and not self.do_seg:
@@ -1460,16 +1434,10 @@ class StableDiffusionXLSEGPipeline(
                 if XLA_AVAILABLE:
                     xm.mark_step()
 
-            if self.do_seg and save_attention_maps:
-                assert save_path_attention_maps is not None, f"save_path_attention_maps is not provided"
-                self._attention_maps = {"up": up_layers_attention_maps,
-                                        "mid": mid_layers_attention_maps,
-                                        "down": down_layers_attention_maps}
-                pickle.dump(self._attention_maps, open(f"{save_path_attention_maps}.pkl", "wb"))
-                del self._attention_maps
-                del down_layers_attention_maps
-                del mid_layers_attention_maps
-                del up_layers_attention_maps
+            # save the metrics logged
+            if metric_logger is not None:
+                metric_logger.save_metrics()
+
 
         if not output_type == "latent":
             # make sure the VAE is in float32 mode, as it overflows in float16
