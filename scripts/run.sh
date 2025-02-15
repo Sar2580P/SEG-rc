@@ -1,0 +1,43 @@
+#!/bin/bash
+
+# Define the variables
+seeds=(42 1828499611299255970 97)
+blur_time_regions=("begin")  # "mid" "end" "begin mid end"
+seg_applied_layers=("mid")  # "down" "up" "mid down" "mid up" "down up" "mid down up"
+metric_tracked_block=("mid" "down" "up")
+num_inference_steps=(20 30 40)
+blurring_technique=("gaussian_3_10" "gaussian_3_1000" "gaussian_-1_10" "ema_0.8_0.98_linear" "ema_0.8_0.98_quadratic" "ema_0.8_0.98_cosine" "temperatureAnnealing_linear_2" "temperatureAnnealing_cosine_2" "temperatureAnnealing_exponential_2")
+guidance_scale=(0 5)
+seg_scale=(0 3)
+
+# Loop over all combinations
+for seed in "${seeds[@]}"; do
+    for blur in "${blur_time_regions[@]}"; do
+        for seg_layer in "${seg_applied_layers[@]}"; do
+            for metric_block in "${metric_tracked_block[@]}"; do
+                for steps in "${num_inference_steps[@]}"; do
+                    for blur_tech in "${blurring_technique[@]}"; do
+                        for guide in "${guidance_scale[@]}"; do
+                            for seg in "${seg_scale[@]}"; do
+                                
+                                # Update config.yaml with sed
+                                sed -i "s/^seed:.*/seed: $seed/" config.yaml
+                                sed -i "s/^num_inference_steps:.*/num_inference_steps: $steps/" config.yaml
+                                sed -i "s/^seg_applied_layers:.*/seg_applied_layers: [$seg_layer]/" config.yaml
+                                sed -i "s/^blur_time_regions:.*/blur_time_regions: [$blur]/" config.yaml
+                                sed -i "s/^metric_tracked_block:.*/metric_tracked_block: $metric_block/" config.yaml
+                                sed -i "s|^blurring_technique:.*|blurring_technique: !!str '$blur_tech'|" config.yaml
+                                sed -i "s/^guidance_scale :.*/guidance_scale : $guide/" config.yaml
+                                sed -i "s/^seg_scale :.*/seg_scale : $seg/" config.yaml
+                                
+                                # Run Python script
+                                python main.py
+                                break
+                            done
+                        done
+                    done
+                done
+            done
+        done
+    done
+done
