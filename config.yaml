@@ -1,6 +1,23 @@
-save_attn_map: !!bool False
-seed: 42
-num_inference_steps: 30
-seg_applied_layers: [up]
+seed: 97
+num_inference_steps: 40
+seg_applied_layers: [mid]
 blur_time_regions: [begin]
-metric_tracked_block: up
+metric_tracked_block: mid
+blurring_technique: !!str 'gaussian_3_10'
+guidance_scale : 5
+seg_scale : 0
+should_log_metrics : True
+save_attention_maps : !!bool False
+sample_ct_attn_maps: 2
+
+
+pics_save_dir : results/pics/${seed}/${blurring_technique}/segAppliedLayers-${seg_applied_layers}__blurTimeRegions-${blur_time_regions}
+atten_save_dir : results/attn_maps/${seed}/${blurring_technique}/segAppliedLayers-${seg_applied_layers}__blurTimeRegions-${blur_time_regions}
+metric_save_dir : results/metrics/${seed}/${blurring_technique}/segAppliedLayers-${seg_applied_layers}__blurTimeRegions-${blur_time_regions}
+
+
+cfg_prompts: 
+  - a jellyfish playing the drums in an underwater concert
+  - a high-resolution satellite image of a bustling shipping port, countless colorful containers
+  - an insect robot preparing a delicious meal, anime style.
+  - a friendly robot helping an old lady cross the street.
