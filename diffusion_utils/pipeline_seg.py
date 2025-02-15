@@ -50,8 +50,8 @@ from diffusers.pipelines.pipeline_utils import DiffusionPipeline, StableDiffusio
 from diffusers.pipelines.stable_diffusion_xl.pipeline_output import StableDiffusionXLPipelineOutput
 
 from diffusers.models.attention_processor import Attention, AttnProcessor2_0
-from attn_processors.SEGCFGSelfAttn import SEGCFGSelfAttnProcessor
-from attn_processors.AttnProcessor import SelfAttnProcessor
+from diffusion_utils.SEGCFGSelfAttn import SEGCFGSelfAttnProcessor
+from diffusion_utils.AttnProcessor import SelfAttnProcessor
 from diffusion_utils.metrics import AttentionMetricsLogger
 
 logger = logging.get_logger(__name__)  # pylint: disable=invalid-name
