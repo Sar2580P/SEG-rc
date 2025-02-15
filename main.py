@@ -49,9 +49,6 @@ if __name__=="__main__":
                 blur_time_regions=config['blur_time_regions'],
                 blurring_technique = config['blurring_technique'],
                 generator=generator,
-                sample_ct_attn_maps=config['sample_ct_attn_maps'],
-                save_attention_maps=config['save_attention_maps'],
-                save_path_attention_maps = os.path.join(config['atten_save_dir'], name)
             ).images
         
         

@@ -7,12 +7,9 @@ blurring_technique: !!str 'gaussian_3_10'
 guidance_scale : 5
 seg_scale : 0
 should_log_metrics : True
-save_attention_maps : !!bool False
-sample_ct_attn_maps: 2
 
 
 pics_save_dir : results/pics/${seed}/${blurring_technique}/segAppliedLayers-${seg_applied_layers}__blurTimeRegions-${blur_time_regions}
-atten_save_dir : results/attn_maps/${seed}/${blurring_technique}/segAppliedLayers-${seg_applied_layers}__blurTimeRegions-${blur_time_regions}
 metric_save_dir : results/metrics/${seed}/${blurring_technique}/segAppliedLayers-${seg_applied_layers}__blurTimeRegions-${blur_time_regions}
 
 
