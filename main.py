@@ -35,8 +35,6 @@ if __name__=="__main__":
                 (f"prompt-{idx}" if config['guidance_scale']>0 else "")
 
         generator = torch.Generator(device="cuda").manual_seed(config["seed"])
-        # generator.seed()  # This will REPLACE the manually set seed with a new random one!
-
         output = pipe(
                 [prompt],
                 num_inference_steps=config['num_inference_steps'],

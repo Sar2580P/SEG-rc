@@ -46,8 +46,6 @@ class AttentionMetricsLogger:
         # For demonstration, only log if current timestamp mod 3 == 0 and layer_idx <= 5.
         # (This is from your provided logic; you can adjust as needed.)
         self.layer_idx += 1
-        if self.curr_time_stamp % 3 > 0 or self.layer_idx > 3:
-            return
 
         l2_norm = self.compute_l2_difference(Q1, Q2)
         self.metric_tracker[self.layer_idx].append(l2_norm)

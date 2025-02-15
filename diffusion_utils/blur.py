@@ -103,8 +103,7 @@ def ema_smoothing_time_dependent(
 
     # If no alpha_fn is provided, use a constant alpha = 0.9
     if alpha_fn is None:
-        def alpha_fn(_t: int, _T: int) -> float:
-            return 0.9
+        alpha_fn = lambda t, T: 0.9
 
     # Initialize the first token as is
     # out[:, :, 0, :] = query[:, :, 0, :]  # (already done by clone)
@@ -151,9 +150,9 @@ def alpha_increasing(
     if mode == "linear":
         ratio_f = ratio
     elif mode == "quadratic":
-        ratio_f = ratio.pow(2)
+        ratio_f = ratio**2
     elif mode == "cosine":
-        ratio_f = (1 - torch.cos(torch.tensor(torch.pi, dtype=t.dtype) * ratio)) / 2
+        ratio_f = (1 - torch.cos(torch.tensor(torch.pi) * ratio)) / 2
     else:
         raise ValueError(f"Unknown mode: {mode}")
     
