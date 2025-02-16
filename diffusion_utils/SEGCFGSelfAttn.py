@@ -16,7 +16,7 @@ from diffusers.utils import (
 )
 import math
 import numpy as np
-from diffusion_utils.blur import (gaussian_blur_2d, time_dependent_scaling ,
+from diffusion_utils.blur import (gaussian_blur_2d, time_dependent_scaling , interpolated_box_blur,
                   ema_smoothing_time_dependent, alpha_increasing)
 from functools import partial
 logger = logging.get_logger(__name__)
@@ -27,43 +27,51 @@ class SEGCFGSelfAttnProcessor:
     Processor for implementing scaled dot-product attention (enabled by default if you're using PyTorch 2.0).
     """
 
-    def __init__(self, curr_iter_idx:int, total_iter:int,blur_time_regions:List,  
-                do_cfg=True, inf_gaussian_blur_sigma_threshold=9999.0, metric_logger:AttentionMetricsLogger=None, 
+    def __init__(self, curr_iter_idx:int, total_iter:int,blur_time_regions:List,
+                do_cfg=True, inf_gaussian_blur_sigma_threshold=9999.0, metric_logger:AttentionMetricsLogger=None,
                  blurring_technique: str = "gaussian_3_10"):
         if not hasattr(F, "scaled_dot_product_attention"):
             raise ImportError("AttnProcessor2_0 requires PyTorch 2.0, to use it, please upgrade PyTorch to 2.0.")
         self.do_cfg = do_cfg
-
-        self.apply_blur = self.get_blur_method(blurring_technique , 
-                                                gaussian_sigma_threshold = inf_gaussian_blur_sigma_threshold , 
+        self.inf_blur = False
+        self.apply_blur = self.get_blur_method(blurring_technique ,
+                                                gaussian_sigma_threshold = inf_gaussian_blur_sigma_threshold ,
                                                 curr_iter_idx=curr_iter_idx, total_iter=total_iter)
         self.should_apply_smoothing = self._should_apply_smoothing(curr_iter_idx, total_iter, blur_time_regions)
         self.metric_logger = metric_logger
-        self.inf_blur = False
-        
+
+
     def get_blur_method(self, blurring_technique:str, gaussian_sigma_threshold:float, curr_iter_idx:int, total_iter:int):
         self.blur_method_name = blurring_technique.split("_")[0]
-        
+
         if self.blur_method_name == "gaussian":
-            _, kernel_size, sigma = blurring_technique.split("_")
+            _, kernel_size, sigma = [x if i == 0 else int(x) for i, x in enumerate(blurring_technique.split("_"))]
             if sigma>gaussian_sigma_threshold:
                 self.inf_blur = True
             else:
-                if kernel_size==0:
+                if kernel_size==-1:
                     kernel_size = math.ceil(6 * sigma) + 1 - math.ceil(6 * sigma) % 2
                 return partial(gaussian_blur_2d, kernel_size=kernel_size, sigma=sigma)
         elif self.blur_method_name == "ema":
-            _, alpha_start, alpha_end, mode = blurring_technique.split("_")
+            _, alpha_start, alpha_end, mode = [
+                                            x if i in (0, 3) else float(x)
+                                            for i, x in enumerate(blurring_technique.split("_"))
+                                        ]
+
             alphaFunc = partial(alpha_increasing, alpha_start=alpha_start, alpha_end=alpha_end, mode=mode)
             return partial(ema_smoothing_time_dependent, alpha_fn=alphaFunc)
         elif self.blur_method_name == "temperatureAnnealing":
-            _,  scheme, f0 = blurring_technique.split("_")
+            _,  scheme, f0 = [x if i <2 else float(x) for i, x in enumerate(blurring_technique.split("_"))]
             return partial(time_dependent_scaling, t=curr_iter_idx, T = total_iter,  scheme=scheme, f0=f0)
-        
+        elif self.blur_method_name == "interpolatedBoxBlur":
+            _, kernel_size , alpha = blurring_technique.split("_")
+            kernel_size, alpha = (int)(kernel_size), (float)(alpha)
+            return partial(interpolated_box_blur, kernel_size=kernel_size, alpha=alpha)
+
         else :
             raise ValueError(f"Blur method {self.blur_method_name} not supported")
 
-    def _should_apply_smoothing(self, curr_t: int, total_t: int, regions: List[str], percent: float=20) -> bool:
+    def _should_apply_smoothing(self, curr_t: int, total_t: int, regions: List[str], percent: float=35) -> bool:
         """
         Determines whether smoothing should be applied based on the current timestamp and regions.
 
@@ -88,7 +96,7 @@ class SEGCFGSelfAttnProcessor:
 
         logger.info(f"Smoothing {'applied' if apply_smoothing else 'not applied'} "
                     f"at curr_t={curr_t}, total_t={total_t}, regions={regions}")
-        
+
         return apply_smoothing
 
 
@@ -157,9 +165,9 @@ class SEGCFGSelfAttnProcessor:
                 query_ptb = query_ptb.permute(0, 1, 3, 2).view(batch_size//3, attn.heads * head_dim, height, width)
 
                 if not self.inf_blur:
-                    if self.blur_method_name!= "temperatureAnnealing": query_ptb = self.apply_blur(query_ptb)  
-                    else: attn_scale = self.apply_blur(query_ptb)
-                    
+                    if self.blur_method_name!= "temperatureAnnealing": query_ptb = self.apply_blur(query_ptb)
+                    else: attn_scale = self.apply_blur(query=query_ptb)
+
                 else:
                     query_ptb[:] = query_ptb.mean(dim=(-2, -1), keepdim=True)
 
@@ -170,8 +178,9 @@ class SEGCFGSelfAttnProcessor:
                 query_ptb = query_ptb.permute(0, 1, 3, 2).view(batch_size//2, attn.heads * head_dim, height, width)
 
                 if not self.inf_blur:
-                    if self.blur_method_name!= "temperatureAnnealing": query_ptb = self.apply_blur(query_ptb)  
-                    else: attn_scale = self.apply_blur(query_ptb)
+
+                    if self.blur_method_name!= "temperatureAnnealing": query_ptb = self.apply_blur(query_ptb)
+                    else: attn_scale = self.apply_blur(query=query_ptb)
                 else:
                     query_ptb[:] = query_ptb.mean(dim=(-2, -1), keepdim=True)
 
@@ -181,7 +190,7 @@ class SEGCFGSelfAttnProcessor:
         hidden_states = F.scaled_dot_product_attention(
                 query, key, value, attn_mask=attention_mask, dropout_p=0.0, is_causal=False, scale=attn_scale
             )
-        
+
 
         hidden_states = hidden_states.transpose(1, 2).reshape(batch_size, -1, attn.heads * head_dim)
         hidden_states = hidden_states.to(query.dtype)
@@ -196,9 +205,9 @@ class SEGCFGSelfAttnProcessor:
 
         if attn.residual_connection:
             hidden_states = hidden_states + residual
-            
+
         if self.metric_logger is not None:
             self.metric_logger.log_metrics(Q1= residual, Q2=hidden_states)
-            
+
         hidden_states = hidden_states / attn.rescale_output_factor
         return hidden_states
