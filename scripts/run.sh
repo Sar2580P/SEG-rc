@@ -1,12 +1,16 @@
 #!/bin/bash
 
 # Define the variables
-seeds=(42)     #  1828499611299255970 97
-blur_time_regions=("begin")  # "mid" "end" "begin mid end"
+seeds=(77 10 769)     #  1828499611299255970 97
+blur_time_regions=("begin" "begin mid")  # "mid" "end" "begin mid end"
 seg_applied_layers=("mid")  # "down" "up" "mid down" "mid up" "down up" "mid down up"
 metric_tracked_block=("mid")   #  "down" "up"
 num_inference_steps=(30)    # 20 30 40
-blurring_technique=("gaussian_3_10" "gaussian_3_1000" "gaussian_-1_10" "ema_0.8_0.98_linear" "ema_0.8_0.98_quadratic" "ema_0.8_0.98_cosine" "temperatureAnnealing_linear_2" "temperatureAnnealing_cosine_2" "temperatureAnnealing_exponential_2")
+interpolatedBoxBlur_techniques=("interpolatedBoxBlur_5_0.9" "interpolatedBoxBlur_17_0.9" "interpolatedBoxBlur_21_0.9" "interpolatedBoxBlur_31_0.9")
+temperatureAnnealing_techniques=("temperatureAnnealing_linear_2" "temperatureAnnealing_linear_2.4" "temperatureAnnealing_cosine_4" "temperatureAnnealing_cosine_6" "temperatureAnnealing_exponential_2.5" "temperatureAnnealing_exponential_3.3")
+gaussian_techniques=("gaussian_3_10" "gaussian_7_10" "gaussian_17_10" "gaussian_-1_10" "gaussian_-1_10000")
+ema_techniques=("ema_0.75_0.9_linear" "ema_0.85_0.95_linear" "ema_0.99_0.99_linear" "ema_0.85_0.99_quadratic" "ema_0.9_0.99_quadratic" "ema_0.9_0.99_cosine" "ema_0.8_0.95_cosine")
+blurring_technique=("${interpolatedBoxBlur_techniques[@]}")
 guidance_scale=(0 5)
 seg_scale=(0 3)
 
@@ -19,7 +23,7 @@ for seed in "${seeds[@]}"; do
                     for blur_tech in "${blurring_technique[@]}"; do
                         for guide in "${guidance_scale[@]}"; do
                             for seg in "${seg_scale[@]}"; do
-                                
+
                                 # Update config.yaml with sed
                                 sed -i "s/^seed:.*/seed: $seed/" config.yaml
                                 sed -i "s/^num_inference_steps:.*/num_inference_steps: $steps/" config.yaml
@@ -29,10 +33,9 @@ for seed in "${seeds[@]}"; do
                                 sed -i "s|^blurring_technique:.*|blurring_technique: !!str '$blur_tech'|" config.yaml
                                 sed -i "s/^guidance_scale :.*/guidance_scale : $guide/" config.yaml
                                 sed -i "s/^seg_scale :.*/seg_scale : $seg/" config.yaml
-                                
+
                                 # Run Python script
                                 python main.py
-                                break
                             done
                         done
                     done

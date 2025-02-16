@@ -1,19 +1,19 @@
-seed: 97
-num_inference_steps: 40
+seed: 77
+num_inference_steps: 30
 seg_applied_layers: [mid]
 blur_time_regions: [begin]
 metric_tracked_block: mid
-blurring_technique: !!str 'gaussian_3_10'
-guidance_scale : 5
-seg_scale : 0
+blurring_technique: !!str 'gaussian_1_10'
+guidance_scale : 0
+seg_scale : 3
 should_log_metrics : True
 
 
-pics_save_dir : results/pics/${seed}/${blurring_technique}/segAppliedLayers-${seg_applied_layers}__blurTimeRegions-${blur_time_regions}
-metric_save_dir : results/metrics/${seed}/${blurring_technique}/segAppliedLayers-${seg_applied_layers}__blurTimeRegions-${blur_time_regions}
+pics_save_dir : results/pics/${seed}/${blurring_technique}/segAppliedLayers-${seg_applied_layers}__blurTimeRegions-${blur_time_regions}/segScale-${seg_scale}_guidanceScale-${guidance_scale}
+metric_save_dir : results/metrics/${seed}/${blurring_technique}/segAppliedLayers-${seg_applied_layers}__blurTimeRegions-${blur_time_regions}/segScale-${seg_scale}_guidanceScale-${guidance_scale}
 
 
-cfg_prompts: 
+cfg_prompts:
   - a jellyfish playing the drums in an underwater concert
   - a high-resolution satellite image of a bustling shipping port, countless colorful containers
   - an insect robot preparing a delicious meal, anime style.

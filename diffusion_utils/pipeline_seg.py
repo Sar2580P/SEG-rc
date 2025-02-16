@@ -862,14 +862,14 @@ class StableDiffusionXLSEGPipeline(
         should_log_metrics: bool = False,
         metric_tracked_block: Optional[str] = None, # must be one of ['down', 'mid', 'up']
         metric_save_dir:str =None,
+        metric_file_name:str=None ,
         denoising_end: Optional[float] = None,
         guidance_scale: float = 5.0,
         seg_scale: float = 3.0,
         seg_applied_layers: List[str] = ['mid'], #['down', 'mid', 'up']
         seg_applied_layers_index: List[str] = None, #['d4', 'd5', 'm0']
         blur_time_regions: List[str] = ['mid'], #['mid', 'start', 'end']
-        blurring_technique: str = None, #['gaussian_kernel_sigma' , 'ema_alphaFunc' , 'temperatureAnnealing_method']
-        save_attention_maps: bool = False,
+        blurring_technique: str = "gaussian_-1_10", #['gaussian_kernel_sigma' , 'ema_alphaFunc' , 'temperatureAnnealing_method']
         negative_prompt: Optional[Union[str, List[str]]] = None,
         negative_prompt_2: Optional[Union[str, List[str]]] = None,
         num_images_per_prompt: Optional[int] = 1,
@@ -1258,7 +1258,7 @@ class StableDiffusionXLSEGPipeline(
         if should_log_metrics:
             assert metric_tracked_block in ['down', 'mid', 'up'], f"Invalid block type: {metric_tracked_block}, must be one of ['down', 'mid', 'up']"
             metric_logger = AttentionMetricsLogger(save_dir=metric_save_dir ,
-                                                block_type=metric_tracked_block)
+                                                block_type=metric_tracked_block, metric_file_name=metric_file_name)
         else:
             metric_logger = None
 
@@ -1266,7 +1266,7 @@ class StableDiffusionXLSEGPipeline(
         with self.progress_bar(total=num_inference_steps) as progress_bar:
             # starting iterative diffusion process
             for i, t in enumerate(timesteps):
-                metric_logger.update_time_stamp(time_stamp=i)  # updating the current time stamp for logging attention maps
+                if metric_logger is not None: metric_logger.update_time_stamp(time_stamp=i)  # updating the current time stamp for logging attention maps
                 if self.interrupt:
                     continue
 
@@ -1296,7 +1296,7 @@ class StableDiffusionXLSEGPipeline(
                                                                 do_cfg=self.do_classifier_free_guidance,
                                                                 curr_iter_idx = len(timesteps) - i - 1, total_iter=len(timesteps),
                                                                 blur_time_regions=blur_time_regions,
-                                                                metric_logger = metric_logger, 
+                                                                metric_logger = metric_logger,
                                                                 blurring_technique = blurring_technique)
                     if self.seg_applied_layers_index:
                         drop_layers = self.seg_applied_layers_index
