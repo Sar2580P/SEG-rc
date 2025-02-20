@@ -42,7 +42,7 @@ class AttentionMetricsLogger:
         Returns:
             float: The Euclidean (L2) norm of (curr - prev) as a Python float.
         """
-        return torch.norm(Mat1- Mat2).item()
+        return torch.norm(Mat1- Mat2, dtype=torch.float16).item()
 
 
     def log_metrics(self, Q1:torch.Tensor, Q2:torch.Tensor) -> None:
