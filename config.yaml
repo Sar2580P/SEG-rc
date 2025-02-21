@@ -1,9 +1,9 @@
-seed: 769
+seed: 77
 num_inference_steps: 30
 seg_applied_layers: [mid]
-blur_time_regions: [begin mid]
+blur_time_regions: [begin]
 metric_tracked_block: mid
-blurring_technique: !!str 'gaussian_31_10'
+blurring_technique: !!str 'interpolatedBoxBlur_61_0.9'
 guidance_scale : 5
 seg_scale : 3
 should_log_metrics : True
