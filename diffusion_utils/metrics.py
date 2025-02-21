@@ -1,5 +1,4 @@
 import os, glob
-from typing import List
 import torch
 import torch.nn.functional as F
 import numpy as np
@@ -42,7 +41,46 @@ class AttentionMetricsLogger:
         Returns:
             float: The Euclidean (L2) norm of (curr - prev) as a Python float.
         """
-        return torch.norm(Mat1- Mat2, dtype=torch.float16).item()
+        return torch.mean(torch.norm(Mat1- Mat2, dtype=torch.float32, dim=[1,2])).item()
+
+
+    def laplacian_variance(self, tensor):
+        """Calculate average variance of Laplacian across channels."""
+        variances = []
+        tensor = tensor.to(torch.float64)
+        tensor = (tensor - tensor.min()) / (tensor.max() - tensor.min())  # Normalize to [0, 1]
+        tensor = (tensor * 512).to(torch.uint16)
+
+        laplacian_kernel = torch.tensor([[0, 1, 0], [1, -4, 1], [0, 1, 0]], dtype=torch.float64, device=tensor.device)
+        laplacian_kernel = laplacian_kernel.view(1, 1, 3, 3)
+
+        tensor = tensor.unsqueeze(1).to(torch.float64)  # Shape (C, 1, H, W)
+        laplacian = F.conv2d(tensor, laplacian_kernel, padding=1)
+        variances = laplacian.var(dim=[2, 3])
+
+        return variances.mean().item()
+
+    def gradient_entropy(self, tensor):
+        """Calculate average entropy of the gradient magnitude across channels."""
+        tensor = tensor.to(torch.float64)
+        tensor = (tensor - tensor.min()) / (tensor.max() - tensor.min())  # Normalize to [0, 1]
+        tensor = (tensor * 512).to(torch.uint16)
+
+        sobel_x = torch.tensor([[1, 0, -1], [2, 0, -2], [1, 0, -1]], dtype=torch.float32, device=tensor.device).view(1, 1, 3, 3)
+        sobel_y = torch.tensor([[1, 2, 1], [0, 0, 0], [-1, -2, -1]], dtype=torch.float32, device=tensor.device).view(1, 1, 3, 3)
+
+        entropies = []
+        for c in range(tensor.shape[0]):
+            channel = tensor[c].unsqueeze(0).unsqueeze(0).to(torch.float32)  # Shape (1, 1, H, W)
+            grad_x = F.conv2d(channel, sobel_x, padding=1)
+            grad_y = F.conv2d(channel, sobel_y, padding=1)
+            magnitude = torch.sqrt(grad_x**2 + grad_y**2)
+
+            hist = torch.histc(magnitude, bins=512, min=0, max=512)
+            hist = hist / hist.sum()
+            entropy = -torch.sum(hist * torch.log2(hist + 1e-10)).item()
+            entropies.append(entropy)
+        return sum(entropies) / len(entropies)
 
 
     def log_metrics(self, Q1:torch.Tensor, Q2:torch.Tensor) -> None:
@@ -58,8 +96,18 @@ class AttentionMetricsLogger:
         # (This is from your provided logic; you can adjust as needed.)
         self.layer_idx += 1
 
+        if self.layer_idx > 3:
+            return
+
         l2_norm = self.compute_l2_difference(Q1, Q2)
-        self.metric_tracker[self.layer_idx].append(l2_norm)
+        laplacian_variance = self.laplacian_variance(Q2 - Q1)
+        gradient_entropy = self.gradient_entropy(Q2 - Q1)
+        metrics = {
+            "l2_norm": l2_norm,
+            "laplacian_variance": laplacian_variance,
+            "gradient_entropy": gradient_entropy
+        }
+        self.metric_tracker[self.layer_idx].append(metrics)
         return
 
     def save_metrics(self):

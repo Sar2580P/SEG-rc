@@ -1,20 +1,20 @@
 #!/bin/bash
 
 # Define the variables
-seeds=(77 10 769)     # 77
-blur_time_regions=("begin" "begin mid")  # "mid" "end" "begin mid end"
-seg_applied_layers=("mid")  # "down" "up" "mid down" "mid up" "down up" "mid down up"
+seeds=(77)     # 77  5867991739709137916
+blur_time_regions=("begin")  #  "mid" "end" "begin mid end"
+seg_applied_layers=("mid")   #   "down" "up" "down, mid, up"
 metric_tracked_block=("mid")   #  "down" "up"
 num_inference_steps=(30)    # 20 30 40
-interpolatedBoxBlur_techniques=("interpolatedBoxBlur_5_0.9" "interpolatedBoxBlur_17_0.9" "interpolatedBoxBlur_21_0.9" "interpolatedBoxBlur_31_0.9" "interpolatedBoxBlur_61_0.9")
+# gaussian_techniques=("gaussian_17_10" "gaussian_31_10" "gaussian_-1 _10" "gaussian_-1_1000")
+interpolatedBoxBlur_techniques=("interpolatedBoxBlur_5_0.9" "interpolatedBoxBlur_17_0.9" "interpolatedBoxBlur_31_0.9" "interpolatedBoxBlur_61_0.9")   # "interpolatedBoxBlur_31_0.5" "interpolatedBoxBlur_31_0.6" "interpolatedBoxBlur_31_0.7" "interpolatedBoxBlur_31_0.8" "interpolatedBoxBlur_31_0.99"
 temperatureAnnealing_techniques=("temperatureAnnealing_linear_2" "temperatureAnnealing_linear_2.4" "temperatureAnnealing_cosine_4" "temperatureAnnealing_cosine_6" "temperatureAnnealing_exponential_2.5" "temperatureAnnealing_exponential_3.3")
-# gaussian_techniques=("gaussian_3_10" "gaussian_7_10" "gaussian_17_10" "gaussian_-1_10" "gaussian_-1_10000")
+gaussian_techniques=("gaussian_3_10" "gaussian_7_10" "gaussian_17_10" "gaussian_-1_10" "gaussian_-1_10000" "gaussian_31_10")
 ema_techniques=("ema_0.85_0.9_linear" "ema_0.95_0.99_linear" "ema_0.50_0.65_linear" "ema_0.6_0.75_linear" "ema_0.75_0.99_linear")
-gaussian_techniques=("gaussian_31_10")
-# blurring_technique=("${interpolatedBoxBlur_techniques[@]}" "${gaussian_techniques[@]}" "${ema_techniques[@]}")
-blurring_technique=("${gaussian_techniques[@]}")
-guidance_scale=(0 5)
-seg_scale=(0 3)
+# blurring_technique=("${interpolatedBoxBlur_techniques[@]}")
+blurring_technique=("${gaussian_techniques[@]}" "${ema_techniques[@]}" "${interpolatedBoxBlur_techniques[@]}")
+guidance_scale=(0 5)    #
+seg_scale=(0 3)   # 0
 
 # Loop over all combinations
 for seed in "${seeds[@]}"; do

@@ -5,7 +5,7 @@ import torch
 from torch import Tensor
 from functools import lru_cache
 
-@lru_cache(maxsize=128)
+@lru_cache(128)
 def get_gaussian_kernel_cached(
     kernel_size: int,
     sigma: float,
@@ -79,84 +79,79 @@ def gaussian_blur_2d(img: Tensor, kernel_size: int, sigma: float) -> Tensor:
 
 
 #______________________________________________________________________________________________________
-def ema_smoothing_time_dependent(
-    query: torch.Tensor,
-    alpha_fn: Optional[Callable[[int, int], float]] = None,
-) -> torch.Tensor:
+# def ema_smoothing_time_dependent(
+#     query: torch.Tensor,
+#     alpha_fn: Optional[Callable[[int, int], float]] = None,
+# ) -> torch.Tensor:
+#     """
+#     Applies EMA smoothing along the token dimension (index 2) for a given tensor,
+#     but allows alpha to vary with time (i.e., alpha depends on t).
+
+#     Each (batch, attn_head, embed_dim) sequence is processed independently along
+#     the token dimension (index 2). The recurrence for t >= 1 is:
+#         y_t = alpha_t * y_{t-1} + (1 - alpha_t) * x_t,
+#     where alpha_t = alpha_fn(t, T).
+
+#     :param query: Input tensor of shape (batch, attn_heads, token_count, embed_dim).
+#     :param alpha_fn: A callable that takes (t, T) and returns alpha_t (float).
+#                      If None, we default to a constant alpha = 0.9.
+#     :return: A tensor of the same shape as 'query', where each sequence has been
+#              smoothed along the token dimension with a time-dependent alpha.
+#     """
+#     out = query.clone()
+#     B, H, T, D = query.shape
+
+#     # If no alpha_fn is provided, use a constant alpha = 0.9
+#     if alpha_fn is None:
+#         alpha_fn = lambda t, T: 0.9
+
+#     # Initialize the first token as is
+#     # out[:, :, 0, :] = query[:, :, 0, :]  # (already done by clone)
+
+#     # Loop over token dimension
+#     for t in range(1, T):
+#         alpha_t = alpha_fn(t=t, T=T)
+#         out[:, :, t, :] = (alpha_t) * out[:, :, t - 1, :] + (1-alpha_t) * query[:, :, t, :]
+#
+    # return out
+
+def ema_vectorized(x: torch.Tensor, alpha: float) -> torch.Tensor:
     """
-    Applies EMA smoothing along the token dimension (index 2) for a given tensor,
-    but allows alpha to vary with time (i.e., alpha depends on t).
+    Apply Exponential Moving Average (EMA) along the token dimension (dim=2).
 
-    Each (batch, attn_head, embed_dim) sequence is processed independently along
-    the token dimension (index 2). The recurrence for t >= 1 is:
-        y_t = alpha_t * y_{t-1} + (1 - alpha_t) * x_t,
-    where alpha_t = alpha_fn(t, T).
+    Args:
+        x (torch.Tensor): Input tensor of shape (batch, attn_heads, tokens, embedding_dim).
+        alpha (float): Smoothing factor (0 < alpha < 1).
 
-    :param query: Input tensor of shape (batch, attn_heads, token_count, embed_dim).
-    :param alpha_fn: A callable that takes (t, T) and returns alpha_t (float).
-                     If None, we default to a constant alpha = 0.9.
-    :return: A tensor of the same shape as 'query', where each sequence has been
-             smoothed along the token dimension with a time-dependent alpha.
+    Returns:
+        torch.Tensor: EMA-applied tensor of shape (batch, attn_heads, tokens, embedding_dim).
     """
-    out = query.clone()
-    B, H, T, D = query.shape
+    # Ensure x is of shape (B, H, T, E)
+    B, H, T, E = x.shape
 
-    # If no alpha_fn is provided, use a constant alpha = 0.9
-    if alpha_fn is None:
-        alpha_fn = lambda t, T: 0.9
+    # Flip weights to align with causal computation
+    weights = get_ema_weights(alpha, T, device=x.device)
 
-    # Initialize the first token as is
-    # out[:, :, 0, :] = query[:, :, 0, :]  # (already done by clone)
+    # Apply EMA along token dimension (dim=2)
+    ema = torch.cumsum(weights.view(1, 1, -1, 1) * x.flip(2), dim=2).flip(2)
 
-    # Loop over token dimension
-    for t in range(1, T):
-        alpha_t = alpha_fn(t=t, T=T)
-        out[:, :, t, :] = (alpha_t) * out[:, :, t - 1, :] + (1-alpha_t) * query[:, :, t, :]
+    return ema
 
-    return out
-
-
-def alpha_increasing(
-    t: torch.Tensor,
-    T: torch.Tensor,
-    alpha_start: torch.Tensor = torch.tensor(0.75),
-    alpha_end: torch.Tensor = torch.tensor(0.99),
-    mode: str = "linear"
-) -> torch.Tensor:
+@lru_cache(128)
+def get_ema_weights(alpha, T, device=None):
     """
-    Computes a time-dependent alpha value as a torch scalar.
-    The value monotonically increases from alpha_start at t=0 to alpha_end at t=T-1.
+    Compute EMA weights for a given smoothing factor and time steps.
 
-    The final function is:
-        alpha(t) = alpha_start + (alpha_end - alpha_start)*ratio_f,
-    where ratio_f depends on the scheduling mode:
+    Args:
+        alpha (float): Smoothing factor (0 < alpha < 1).
+        T (int): Number of time steps.
+        device (torch.device, optional): Torch device. Defaults to None.
 
-      - "linear":    ratio_f = t / (T - 1)
-      - "quadratic": ratio_f = (t / (T - 1))^2
-      - "cosine":    ratio_f = (1 - cos(pi * t / (T - 1)))/2
-
-    :param t: Current time step (torch scalar), 0 <= t <= T-1.
-    :param T: Total time steps (torch scalar, T > 1).
-    :param alpha_start: Initial alpha value at t=0.
-    :param alpha_end: Final alpha value at t=T-1.
-    :param mode: One of "linear", "quadratic", or "cosine".
-    :return: A torch scalar representing alpha(t).
+    Returns:
+        torch.Tensor: EMA weights tensor of shape (T,).
     """
-    # Ensure T > 1 to avoid division by zero.
-    if T <= 1:
-        return alpha_start
-
-    ratio = t / (T - 1)
-    if mode == "linear":
-        ratio_f = ratio
-    elif mode == "quadratic":
-        ratio_f = ratio**2
-    elif mode == "cosine":
-        ratio_f = (1 - torch.cos(torch.tensor(torch.pi) * ratio)) / 2
-    else:
-        raise ValueError(f"Unknown mode: {mode}")
-
-    return alpha_start + (alpha_end - alpha_start) * ratio_f
+    weights = torch.pow(1 - alpha, torch.arange(T, device=device))
+    return alpha * weights.flip(0)
 
 
 #______________________________________________________________________________________________________
@@ -204,8 +199,7 @@ def time_dependent_scaling(
     dim = query.shape[-1]
     return (math.sqrt(dim) * f_t)**-1
 
-#______________________________________________________________________________________________________
-
+# # #______________________________________________________________________________________________________
 def compute_integral_image_for_kernel(x: torch.Tensor, k: int) -> torch.Tensor:
     """Compute the integral image for x (B, C, T, E, D) using a box filter of size k."""
     half_k = k // 2
@@ -245,3 +239,4 @@ def interpolated_box_blur(query: torch.Tensor, kernel_size: int, alpha: float) -
     """Interpolates between original image and its box-blurred version."""
     blurred = compute_box_blur(query, kernel_size)
     return torch.lerp(query, blurred, alpha)  # Faster than manual linear interpolation
+
